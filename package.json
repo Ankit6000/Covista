@@ -1,0 +1,29 @@
+{
+  "name": "watchparty-room",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "desktop": "concurrently \"npm run server\" \"npm run client\" \"npm run desktop:main\"",
+    "desktop:main": "wait-on tcp:3001 tcp:5173 && electron electron/main.cjs",
+    "server": "node server/index.js",
+    "client": "vite --host 0.0.0.0 --port 5173 --strictPort",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "electron": "^37.2.1",
+    "vite": "^5.4.11"
+    ,"wait-on": "^8.0.3"
+  }
+}
