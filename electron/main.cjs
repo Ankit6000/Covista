@@ -3,6 +3,7 @@ const path = require("path");
 
 const isDev = !app.isPackaged;
 const rendererUrl = process.env.ELECTRON_RENDERER_URL || "http://127.0.0.1:5173";
+const hostedWebAppUrl = process.env.HOSTED_WEB_APP_URL || "";
 
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
 app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
@@ -145,6 +146,8 @@ function createMainWindow() {
 
   if (isDev) {
     mainWindow.loadURL(rendererUrl);
+  } else if (hostedWebAppUrl) {
+    mainWindow.loadURL(hostedWebAppUrl);
   } else {
     mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   }

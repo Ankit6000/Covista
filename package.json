@@ -8,6 +8,7 @@
     "desktop": "concurrently \"npm run server\" \"npm run client\" \"npm run desktop:main\"",
     "desktop:main": "wait-on tcp:3001 tcp:5173 && electron electron/main.cjs",
     "server": "node server/index.js",
+    "start": "node server/index.js",
     "client": "vite --host 0.0.0.0 --port 5173 --strictPort",
     "build": "vite build",
     "preview": "vite preview"

@@ -19,6 +19,10 @@ const io = new Server(server, {
 });
 
 const rooms = new Map();
+const DEFAULT_ICE_SERVERS = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" }
+];
 
 app.use(express.json({ limit: "12mb" }));
 app.use((req, res, next) => {
@@ -55,8 +59,39 @@ function getParticipants(room) {
   return Array.from(room.participants.values()).map(serializeParticipant);
 }
 
+function getIceServers() {
+  const urls = String(process.env.TURN_URLS || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (!urls.length) {
+    return DEFAULT_ICE_SERVERS;
+  }
+
+  const turnServer = {
+    urls
+  };
+
+  if (process.env.TURN_USERNAME) {
+    turnServer.username = process.env.TURN_USERNAME;
+  }
+
+  if (process.env.TURN_CREDENTIAL) {
+    turnServer.credential = process.env.TURN_CREDENTIAL;
+  }
+
+  return [...DEFAULT_ICE_SERVERS, turnServer];
+}
+
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
+});
+
+app.get("/api/config", (_req, res) => {
+  res.json({
+    iceServers: getIceServers()
+  });
 });
 
 app.post("/api/rooms", (_req, res) => {

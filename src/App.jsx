@@ -1,11 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 
-const API_BASE =
-  window.location.port === "3001"
-    ? window.location.origin
-    : `${window.location.protocol}//${window.location.hostname}:3001`;
-const ICE_SERVERS = {
+function getApiBase() {
+  const isLocalDev =
+    ["localhost", "127.0.0.1"].includes(window.location.hostname) && window.location.port === "5173";
+
+  if (isLocalDev) {
+    return `${window.location.protocol}//${window.location.hostname}:3001`;
+  }
+
+  return window.location.origin;
+}
+
+const API_BASE = getApiBase();
+const DEFAULT_RTC_CONFIG = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" }
@@ -172,6 +180,7 @@ function App() {
   const [controlNotice, setControlNotice] = useState("");
   const [browserInteractionActive, setBrowserInteractionActive] = useState(false);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const [rtcConfig, setRtcConfig] = useState(DEFAULT_RTC_CONFIG);
 
   const localVideoRef = useRef(null);
   const remoteVideoRefs = useRef(new Map());
@@ -334,6 +343,31 @@ function App() {
       setUnreadChatCount(0);
     }
   }, [sidebarTab]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRuntimeConfig() {
+      try {
+        const response = await fetch(`${API_BASE}/api/config`);
+        if (!response.ok) {
+          return;
+        }
+
+        const data = await response.json();
+        if (!cancelled && Array.isArray(data?.iceServers) && data.iceServers.length > 0) {
+          setRtcConfig({ iceServers: data.iceServers });
+        }
+      } catch (_error) {
+        // Fall back to default STUN-only config when runtime config is unavailable.
+      }
+    }
+
+    loadRuntimeConfig();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!desktopHost) {
@@ -1168,7 +1202,7 @@ function App() {
   }
 
   function buildPeerConnection(participantId, activeSocket) {
-    const connection = new RTCPeerConnection(ICE_SERVERS);
+    const connection = new RTCPeerConnection(rtcConfig);
 
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => {
@@ -1286,7 +1320,7 @@ function App() {
   }
 
   function buildBrowserPeerConnection(participantId, activeSocket) {
-    const connection = new RTCPeerConnection(ICE_SERVERS);
+    const connection = new RTCPeerConnection(rtcConfig);
 
     if (browserStreamRef.current) {
       browserStreamRef.current.getTracks().forEach((track) => {

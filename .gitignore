@@ -2,3 +2,7 @@ node_modules/
 dist/
 *.log
 *.err.log
+.env
+.env.local
+.DS_Store
+Thumbs.db
