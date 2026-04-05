@@ -194,6 +194,7 @@ function App() {
     iceGatheringState: "new"
   });
   const [desktopLaunchHint, setDesktopLaunchHint] = useState("");
+  const [hostPromptOpen, setHostPromptOpen] = useState(false);
 
   const localVideoRef = useRef(null);
   const remoteVideoRefs = useRef(new Map());
@@ -410,6 +411,7 @@ function App() {
       setJoinRoomInput(nextRoomId);
       setError("");
       setDesktopLaunchHint("");
+      setHostPromptOpen(false);
     });
 
     return () => {
@@ -659,6 +661,8 @@ function App() {
       setRoomId(data.roomId);
       setJoinRoomInput(data.roomId);
       setError("");
+      setDesktopLaunchHint("");
+      setHostPromptOpen(true);
     } catch (_error) {
       setError("Could not create a room right now. Make sure the server is running.");
     }
@@ -1658,6 +1662,31 @@ function App() {
             </a>
           </div>
           {desktopLaunchHint ? <div className="desktop-handoff-note">{desktopLaunchHint}</div> : null}
+        </div>
+      ) : null}
+
+      {hostPromptOpen && !desktopHost ? (
+        <div className="host-choice-overlay" role="dialog" aria-modal="true">
+          <div className="host-choice-modal">
+            <span className="eyebrow">Host this room</span>
+            <h3>Use the desktop app for the real shared browser</h3>
+            <p>
+              Guests can stay on the website. To host the real synced browser session, open the desktop app for this
+              room.
+            </p>
+            <div className="host-choice-actions">
+              <button className="primary-btn" type="button" onClick={openDesktopHostApp}>
+                Host With Desktop App
+              </button>
+              <a className="secondary-link-btn" href={DESKTOP_APP_DOWNLOAD_URL} target="_blank" rel="noreferrer">
+                Download App
+              </a>
+            </div>
+            {desktopLaunchHint ? <div className="desktop-handoff-note">{desktopLaunchHint}</div> : null}
+            <button className="host-choice-dismiss" type="button" onClick={() => setHostPromptOpen(false)}>
+              Continue on website
+            </button>
+          </div>
         </div>
       ) : null}
 

@@ -367,6 +367,51 @@ select {
   font-size: 0.9rem;
 }
 
+.host-choice-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgba(2, 7, 16, 0.66);
+  backdrop-filter: blur(14px);
+}
+
+.host-choice-modal {
+  width: min(34rem, 100%);
+  border-radius: 28px;
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  background: rgba(9, 20, 37, 0.96);
+  box-shadow: var(--shadow);
+}
+
+.host-choice-modal h3 {
+  margin: 0;
+  font-size: 1.7rem;
+}
+
+.host-choice-modal p {
+  margin: 0.85rem 0 1.15rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.host-choice-actions {
+  display: flex;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.host-choice-dismiss {
+  margin-top: 1rem;
+  background: transparent;
+  color: var(--muted);
+  text-decoration: underline;
+  padding: 0;
+}
+
 .room-layout {
   display: grid;
   grid-template-columns: minmax(0, 3.1fr) minmax(320px, 0.95fr);
