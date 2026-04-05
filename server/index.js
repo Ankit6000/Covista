@@ -102,7 +102,7 @@ async function getCloudflareIceServers() {
     return cloudflareTurnCache.iceServers;
   }
 
-  const response = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(keyId)}/credentials/generate`, {
+  const response = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(keyId)}/credentials/generate-ice-servers`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiToken}`,
