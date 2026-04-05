@@ -1194,7 +1194,7 @@ function App() {
     }
 
     const connection = buildPeerConnection(participantId, activeSocket);
-    peersRef.current.set(participantId, { connection });
+    peersRef.current.set(participantId, { connection, pendingCandidates: [] });
 
     const offer = await connection.createOffer();
     await connection.setLocalDescription(offer);
@@ -1258,7 +1258,7 @@ function App() {
     let peer = peersRef.current.get(senderId);
     if (!peer) {
       const connection = buildPeerConnection(senderId, activeSocket);
-      peer = { connection };
+      peer = { connection, pendingCandidates: [] };
       peersRef.current.set(senderId, peer);
     }
 
@@ -1266,6 +1266,10 @@ function App() {
 
     if (signal.type === "offer") {
       await connection.setRemoteDescription(new RTCSessionDescription(signal));
+      while (peer.pendingCandidates.length > 0) {
+        const candidate = peer.pendingCandidates.shift();
+        await connection.addIceCandidate(new RTCIceCandidate(candidate));
+      }
       const answer = await connection.createAnswer();
       await connection.setLocalDescription(answer);
 
@@ -1282,10 +1286,19 @@ function App() {
 
     if (signal.type === "answer") {
       await connection.setRemoteDescription(new RTCSessionDescription(signal));
+      while (peer.pendingCandidates.length > 0) {
+        const candidate = peer.pendingCandidates.shift();
+        await connection.addIceCandidate(new RTCIceCandidate(candidate));
+      }
       return;
     }
 
     if (signal.type === "ice-candidate" && signal.candidate) {
+      if (!connection.remoteDescription) {
+        peer.pendingCandidates.push(signal.candidate);
+        return;
+      }
+
       await connection.addIceCandidate(new RTCIceCandidate(signal.candidate));
     }
   }
@@ -1311,7 +1324,7 @@ function App() {
     }
 
     const connection = buildBrowserPeerConnection(participantId, activeSocket);
-    browserPeersRef.current.set(participantId, { connection });
+    browserPeersRef.current.set(participantId, { connection, pendingCandidates: [] });
 
     const offer = await connection.createOffer();
     await connection.setLocalDescription(offer);
@@ -1389,7 +1402,7 @@ function App() {
     let peer = browserPeersRef.current.get(senderId);
     if (!peer) {
       const connection = buildBrowserPeerConnection(senderId, activeSocket);
-      peer = { connection };
+      peer = { connection, pendingCandidates: [] };
       browserPeersRef.current.set(senderId, peer);
     }
 
@@ -1397,6 +1410,10 @@ function App() {
 
     if (signal.type === "offer") {
       await connection.setRemoteDescription(new RTCSessionDescription(signal));
+      while (peer.pendingCandidates.length > 0) {
+        const candidate = peer.pendingCandidates.shift();
+        await connection.addIceCandidate(new RTCIceCandidate(candidate));
+      }
       const answer = await connection.createAnswer();
       await connection.setLocalDescription(answer);
 
@@ -1414,10 +1431,19 @@ function App() {
 
     if (signal.type === "answer") {
       await connection.setRemoteDescription(new RTCSessionDescription(signal));
+      while (peer.pendingCandidates.length > 0) {
+        const candidate = peer.pendingCandidates.shift();
+        await connection.addIceCandidate(new RTCIceCandidate(candidate));
+      }
       return;
     }
 
     if (signal.type === "ice-candidate" && signal.candidate) {
+      if (!connection.remoteDescription) {
+        peer.pendingCandidates.push(signal.candidate);
+        return;
+      }
+
       await connection.addIceCandidate(new RTCIceCandidate(signal.candidate));
     }
   }
