@@ -136,11 +136,18 @@ npm install
 npm run package:desktop
 ```
 
+Build the installable Windows app:
+
+```bash
+npm run package:desktop:installer
+```
+
 Output files are created in:
 
 - `release/`
 
 The default package flow creates a Windows portable app (`.exe`) you can share directly.
+The installer flow creates a proper installed Windows app, which is the better option for reliable `covista://` link handling.
 
 The packaged app is preconfigured to open:
 
