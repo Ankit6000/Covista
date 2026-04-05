@@ -70,6 +70,10 @@ Recommended Render setup:
    - `TURN_URLS`
    - `TURN_USERNAME`
    - `TURN_CREDENTIAL`
+   - or Cloudflare TURN env vars:
+     - `CLOUDFLARE_TURN_KEY_ID`
+     - `CLOUDFLARE_TURN_TOKEN`
+     - `CLOUDFLARE_TURN_TTL`
 5. Deploy
 
 After deploy, your public app URL will look like:
@@ -85,10 +89,15 @@ Environment variables:
 - `TURN_URLS`
 - `TURN_USERNAME`
 - `TURN_CREDENTIAL`
+- `CLOUDFLARE_TURN_KEY_ID`
+- `CLOUDFLARE_TURN_TOKEN`
+- `CLOUDFLARE_TURN_TTL`
 
 Example values are in [.env.example](C:/Users/Ankit/Documents/New%20project/.env.example).
 
-If these are not set, the app falls back to public STUN only.
+If Cloudflare TURN env vars are set, the backend generates short-lived TURN credentials automatically for clients.
+
+If neither Cloudflare TURN nor static TURN env vars are set, the app falls back to public STUN only.
 
 ### 3. Distribute the Electron host app
 
@@ -138,6 +147,9 @@ Optional server env vars:
 - `TURN_URLS`
 - `TURN_USERNAME`
 - `TURN_CREDENTIAL`
+- `CLOUDFLARE_TURN_KEY_ID`
+- `CLOUDFLARE_TURN_TOKEN`
+- `CLOUDFLARE_TURN_TTL`
 - `HOSTED_WEB_APP_URL` for packaged Electron host usage
 
 ## Notes

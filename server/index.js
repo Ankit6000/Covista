@@ -23,6 +23,10 @@ const DEFAULT_ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" }
 ];
+const cloudflareTurnCache = {
+  iceServers: null,
+  expiresAt: 0
+};
 
 app.use(express.json({ limit: "12mb" }));
 app.use((req, res, next) => {
@@ -59,7 +63,7 @@ function getParticipants(room) {
   return Array.from(room.participants.values()).map(serializeParticipant);
 }
 
-function getIceServers() {
+function getStaticIceServers() {
   const urls = String(process.env.TURN_URLS || "")
     .split(",")
     .map((value) => value.trim())
@@ -84,13 +88,64 @@ function getIceServers() {
   return [...DEFAULT_ICE_SERVERS, turnServer];
 }
 
+async function getCloudflareIceServers() {
+  const keyId = String(process.env.CLOUDFLARE_TURN_KEY_ID || "").trim();
+  const apiToken = String(process.env.CLOUDFLARE_TURN_TOKEN || "").trim();
+  const ttl = Math.max(60, Math.min(Number(process.env.CLOUDFLARE_TURN_TTL || 3600), 86400));
+
+  if (!keyId || !apiToken) {
+    return null;
+  }
+
+  const now = Date.now();
+  if (cloudflareTurnCache.iceServers && cloudflareTurnCache.expiresAt - now > 60_000) {
+    return cloudflareTurnCache.iceServers;
+  }
+
+  const response = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(keyId)}/credentials/generate`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ ttl })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Cloudflare TURN request failed with status ${response.status}`);
+  }
+
+  const payload = await response.json();
+  const iceServers = Array.isArray(payload?.iceServers) ? payload.iceServers : null;
+  if (!iceServers?.length) {
+    throw new Error("Cloudflare TURN response did not include iceServers.");
+  }
+
+  cloudflareTurnCache.iceServers = [...DEFAULT_ICE_SERVERS, ...iceServers];
+  cloudflareTurnCache.expiresAt = now + ttl * 1000;
+  return cloudflareTurnCache.iceServers;
+}
+
+async function getIceServers() {
+  try {
+    const cloudflareIceServers = await getCloudflareIceServers();
+    if (cloudflareIceServers?.length) {
+      return cloudflareIceServers;
+    }
+  } catch (error) {
+    console.warn("Cloudflare TURN config unavailable:", error.message);
+  }
+
+  return getStaticIceServers();
+}
+
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/config", (_req, res) => {
+app.get("/api/config", async (_req, res) => {
   res.json({
-    iceServers: getIceServers()
+    iceServers: await getIceServers()
   });
 });
 
