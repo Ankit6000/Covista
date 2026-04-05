@@ -182,6 +182,12 @@ function App() {
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [rtcConfig, setRtcConfig] = useState(DEFAULT_RTC_CONFIG);
   const [rtcConfigReady, setRtcConfigReady] = useState(false);
+  const [browserConnectionDebug, setBrowserConnectionDebug] = useState({
+    role: "idle",
+    connectionState: "new",
+    iceConnectionState: "new",
+    iceGatheringState: "new"
+  });
 
   const localVideoRef = useRef(null);
   const remoteVideoRefs = useRef(new Map());
@@ -996,6 +1002,12 @@ function App() {
 
       browserStreamRef.current = stream;
       setBrowserStreamReady(true);
+      setBrowserConnectionDebug({
+        role: "host",
+        connectionState: "new",
+        iceConnectionState: "new",
+        iceGatheringState: "new"
+      });
       setDesktopBrowserState((current) => ({
         ...current,
         isStreaming: true
@@ -1067,6 +1079,12 @@ function App() {
     browserPeersRef.current.forEach((_, participantId) => removeBrowserPeer(participantId));
     setBrowserStreamReady(false);
     setBrowserRemoteReady(false);
+    setBrowserConnectionDebug({
+      role: "idle",
+      connectionState: "new",
+      iceConnectionState: "new",
+      iceGatheringState: "new"
+    });
     setDesktopBrowserState((current) => ({
       ...current,
       isStreaming: false
@@ -1373,6 +1391,12 @@ function App() {
       const [stream] = event.streams;
       browserRemoteStreamRef.current = stream;
       setBrowserRemoteReady(true);
+      setBrowserConnectionDebug({
+        role: "guest",
+        connectionState: connection.connectionState,
+        iceConnectionState: connection.iceConnectionState,
+        iceGatheringState: connection.iceGatheringState
+      });
       setBrowserState((current) => ({
         ...current,
         status: "desktop-webrtc",
@@ -1386,9 +1410,37 @@ function App() {
     };
 
     connection.onconnectionstatechange = () => {
-      if (["disconnected", "failed", "closed"].includes(connection.connectionState)) {
+      setBrowserConnectionDebug((current) => ({
+        ...current,
+        role: browserStreamRef.current ? "host" : current.role,
+        connectionState: connection.connectionState,
+        iceConnectionState: connection.iceConnectionState,
+        iceGatheringState: connection.iceGatheringState
+      }));
+
+      if (["failed", "closed"].includes(connection.connectionState)) {
         removeBrowserPeer(participantId);
       }
+    };
+
+    connection.oniceconnectionstatechange = () => {
+      setBrowserConnectionDebug((current) => ({
+        ...current,
+        role: browserStreamRef.current ? "host" : current.role,
+        connectionState: connection.connectionState,
+        iceConnectionState: connection.iceConnectionState,
+        iceGatheringState: connection.iceGatheringState
+      }));
+    };
+
+    connection.onicegatheringstatechange = () => {
+      setBrowserConnectionDebug((current) => ({
+        ...current,
+        role: browserStreamRef.current ? "host" : current.role,
+        connectionState: connection.connectionState,
+        iceConnectionState: connection.iceConnectionState,
+        iceGatheringState: connection.iceGatheringState
+      }));
     };
 
     return connection;
@@ -1667,6 +1719,16 @@ function App() {
               <span>{browserStreamReady ? "Desktop browser live stream active" : "Desktop browser live stream idle"}</span>
               <span>Socket: {socketRef.current?.connected ? "connected" : "not connected"}</span>
               <span>Role: host</span>
+              <span>Browser peer: {browserConnectionDebug.connectionState}</span>
+              <span>ICE: {browserConnectionDebug.iceConnectionState}</span>
+            </div>
+          ) : null}
+
+          {!desktopHost && browserState.status?.startsWith("desktop-") ? (
+            <div className="desktop-debug">
+              <span>Browser peer: {browserConnectionDebug.connectionState}</span>
+              <span>ICE: {browserConnectionDebug.iceConnectionState}</span>
+              <span>Gathering: {browserConnectionDebug.iceGatheringState}</span>
             </div>
           ) : null}
 
