@@ -181,6 +181,7 @@ function App() {
   const [browserInteractionActive, setBrowserInteractionActive] = useState(false);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [rtcConfig, setRtcConfig] = useState(DEFAULT_RTC_CONFIG);
+  const [rtcConfigReady, setRtcConfigReady] = useState(false);
 
   const localVideoRef = useRef(null);
   const remoteVideoRefs = useRef(new Map());
@@ -351,6 +352,9 @@ function App() {
       try {
         const response = await fetch(`${API_BASE}/api/config`);
         if (!response.ok) {
+          if (!cancelled) {
+            setRtcConfigReady(true);
+          }
           return;
         }
 
@@ -360,6 +364,10 @@ function App() {
         }
       } catch (_error) {
         // Fall back to default STUN-only config when runtime config is unavailable.
+      } finally {
+        if (!cancelled) {
+          setRtcConfigReady(true);
+        }
       }
     }
 
@@ -387,7 +395,7 @@ function App() {
   }, [desktopHost]);
 
   useEffect(() => {
-    if (!roomId || !username) {
+    if (!roomId || !username || !rtcConfigReady) {
       return undefined;
     }
 
@@ -530,7 +538,7 @@ function App() {
       browserPeersRef.current.forEach((_, participantId) => removeBrowserPeer(participantId));
       setSocket(null);
     };
-  }, [roomId, username]);
+  }, [roomId, username, rtcConfigReady]);
 
   useEffect(() => {
     if (!socketRef.current || !roomId || isOwner) {
