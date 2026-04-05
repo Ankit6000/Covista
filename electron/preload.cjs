@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld("desktopHost", {
   sendHostBrowserMouseEvent: (payload) => ipcRenderer.invoke("host-browser:mouse-event", payload),
   sendHostBrowserKeyEvent: (payload) => ipcRenderer.invoke("host-browser:key-event", payload),
   uploadRoomFrame: (payload) => ipcRenderer.invoke("host-browser:upload-frame", payload),
+  openDeepLink: (url) => ipcRenderer.invoke("app:open-deep-link", url),
   onHostBrowserState: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("host-browser:state", listener);
@@ -19,5 +20,10 @@ contextBridge.exposeInMainWorld("desktopHost", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("host-browser:frame", listener);
     return () => ipcRenderer.removeListener("host-browser:frame", listener);
+  },
+  onLaunchRoom: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("app:launch-room", listener);
+    return () => ipcRenderer.removeListener("app:launch-room", listener);
   }
 });

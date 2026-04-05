@@ -127,6 +127,11 @@ select {
   margin: 1.2rem 0 2rem;
 }
 
+.hero-note {
+  margin: 1rem 0 0;
+  font-size: 0.96rem;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) auto;
@@ -302,6 +307,7 @@ select {
   display: flex;
   gap: 0.85rem;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .invite-box {
@@ -310,6 +316,54 @@ select {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 0.9rem;
+}
+
+.desktop-handoff-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background: rgba(10, 22, 39, 0.86);
+}
+
+.desktop-handoff-card strong,
+.desktop-handoff-card span {
+  display: block;
+}
+
+.desktop-handoff-card span {
+  color: var(--muted);
+  margin-top: 0.2rem;
+}
+
+.desktop-handoff-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.secondary-link-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.1rem;
+  border-radius: 18px;
+  padding: 0.95rem 1.25rem;
+  font-weight: 700;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.desktop-handoff-note {
+  width: 100%;
+  color: var(--muted);
   font-size: 0.9rem;
 }
 
@@ -800,7 +854,8 @@ select {
 
   .topbar-actions,
   .room-topbar,
-  .control-row {
+  .control-row,
+  .desktop-handoff-card {
     flex-direction: column;
     align-items: stretch;
   }

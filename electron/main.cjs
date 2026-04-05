@@ -14,6 +14,49 @@ app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
 let mainWindow = null;
 let hostWindow = null;
 let captureTimer = null;
+let pendingLaunchRoom = null;
+
+function getDeepLinkUrlFromArgv(argv = []) {
+  return argv.find((value) => typeof value === "string" && value.startsWith("covista://")) || null;
+}
+
+function parseLaunchRoom(urlString) {
+  if (!urlString) {
+    return null;
+  }
+
+  try {
+    const url = new URL(urlString);
+    const roomId = (url.searchParams.get("room") || "").trim().toUpperCase();
+    if (!roomId) {
+      return null;
+    }
+
+    return {
+      roomId,
+      source: urlString
+    };
+  } catch (_error) {
+    return null;
+  }
+}
+
+function dispatchPendingLaunchRoom() {
+  if (!mainWindow || mainWindow.isDestroyed() || !pendingLaunchRoom) {
+    return;
+  }
+
+  mainWindow.webContents.send("app:launch-room", pendingLaunchRoom);
+}
+
+function registerProtocolHandler() {
+  if (process.defaultApp) {
+    app.setAsDefaultProtocolClient("covista", process.execPath, [path.resolve(process.argv[1] || "")]);
+    return;
+  }
+
+  app.setAsDefaultProtocolClient("covista");
+}
 
 function sendToRenderer(channel, payload) {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -153,9 +196,50 @@ function createMainWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   }
+
+  mainWindow.webContents.on("did-finish-load", () => {
+    dispatchPendingLaunchRoom();
+  });
+}
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", (_event, argv) => {
+    const launchRoom = parseLaunchRoom(getDeepLinkUrlFromArgv(argv));
+    if (launchRoom) {
+      pendingLaunchRoom = launchRoom;
+    }
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      mainWindow.focus();
+      dispatchPendingLaunchRoom();
+    }
+  });
 }
 
 app.whenReady().then(() => {
+  registerProtocolHandler();
+
+  const initialLaunchRoom = parseLaunchRoom(getDeepLinkUrlFromArgv(process.argv));
+  if (initialLaunchRoom) {
+    pendingLaunchRoom = initialLaunchRoom;
+  }
+
+  app.on("open-url", (event, urlString) => {
+    event.preventDefault();
+    const launchRoom = parseLaunchRoom(urlString);
+    if (launchRoom) {
+      pendingLaunchRoom = launchRoom;
+      dispatchPendingLaunchRoom();
+    }
+  });
+
   session.defaultSession.setDisplayMediaRequestHandler(
     async (_request, callback) => {
       if (!hostWindow || hostWindow.isDestroyed()) {
@@ -337,6 +421,17 @@ app.whenReady().then(() => {
         message: error?.message || "Unknown upload failure"
       };
     }
+  });
+
+  ipcMain.handle("app:open-deep-link", async (_event, urlString) => {
+    const launchRoom = parseLaunchRoom(urlString);
+    if (!launchRoom) {
+      return { ok: false, reason: "invalid-room-link" };
+    }
+
+    pendingLaunchRoom = launchRoom;
+    dispatchPendingLaunchRoom();
+    return { ok: true };
   });
 
   app.on("activate", () => {

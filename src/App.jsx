@@ -13,6 +13,7 @@ function getApiBase() {
 }
 
 const API_BASE = getApiBase();
+const DESKTOP_APP_DOWNLOAD_URL = "https://github.com/Ankit6000/Covista/releases";
 const DEFAULT_RTC_CONFIG = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
@@ -135,6 +136,10 @@ function getEmbedWarning(url) {
   return "";
 }
 
+function getDesktopLaunchUrl(roomId) {
+  return `covista://host?room=${encodeURIComponent(roomId)}`;
+}
+
 function App() {
   const desktopHost = window.desktopHost || null;
   const [username, setUsername] = useState("");
@@ -188,6 +193,7 @@ function App() {
     iceConnectionState: "new",
     iceGatheringState: "new"
   });
+  const [desktopLaunchHint, setDesktopLaunchHint] = useState("");
 
   const localVideoRef = useRef(null);
   const remoteVideoRefs = useRef(new Map());
@@ -395,8 +401,20 @@ function App() {
       }));
     });
 
+    const unsubscribeLaunchRoom = desktopHost.onLaunchRoom(({ roomId: nextRoomId }) => {
+      if (!nextRoomId) {
+        return;
+      }
+
+      setRoomId(nextRoomId);
+      setJoinRoomInput(nextRoomId);
+      setError("");
+      setDesktopLaunchHint("");
+    });
+
     return () => {
       unsubscribeState?.();
+      unsubscribeLaunchRoom?.();
     };
   }, [desktopHost]);
 
@@ -668,6 +686,29 @@ function App() {
     await navigator.clipboard.writeText(invitationLink);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
+  }
+
+  async function openDesktopHostApp() {
+    if (!roomId) {
+      setDesktopLaunchHint("Create a room first, then launch the desktop host app.");
+      return;
+    }
+
+    const deepLink = getDesktopLaunchUrl(roomId);
+
+    if (desktopHost) {
+      const result = await desktopHost.openDeepLink(deepLink);
+      if (!result?.ok) {
+        setDesktopLaunchHint("Could not hand off this room to the desktop host app yet.");
+      }
+      return;
+    }
+
+    setDesktopLaunchHint("Trying to open the desktop host app. If nothing opens, install it from GitHub Releases.");
+    window.location.href = deepLink;
+    window.setTimeout(() => {
+      setDesktopLaunchHint("If the desktop app did not open, install it first from GitHub Releases, then try again.");
+    }, 1600);
   }
 
   function sendChatMessage(event) {
@@ -1556,6 +1597,9 @@ function App() {
           </div>
 
           {error ? <p className="error-text">{error}</p> : null}
+          <p className="hero-copy hero-note">
+            Guests stay on the website. Hosts use the desktop app for the real shared browser.
+          </p>
 
           <div className="feature-strip">
             <div>
@@ -1591,8 +1635,31 @@ function App() {
           <button className="secondary-btn" onClick={copyInviteLink}>
             {copied ? "Copied" : "Copy Invite"}
           </button>
+          {!desktopHost && isOwner ? (
+            <button className="primary-btn" type="button" onClick={openDesktopHostApp}>
+              Host With Desktop App
+            </button>
+          ) : null}
         </div>
       </header>
+
+      {!desktopHost && isOwner ? (
+        <div className="desktop-handoff-card">
+          <div>
+            <strong>Host this room from the desktop app</strong>
+            <span>Open Covista Desktop to run the real shared browser session for this room.</span>
+          </div>
+          <div className="desktop-handoff-actions">
+            <button className="primary-btn" type="button" onClick={openDesktopHostApp}>
+              Open Desktop App
+            </button>
+            <a className="secondary-link-btn" href={DESKTOP_APP_DOWNLOAD_URL} target="_blank" rel="noreferrer">
+              Download App
+            </a>
+          </div>
+          {desktopLaunchHint ? <div className="desktop-handoff-note">{desktopLaunchHint}</div> : null}
+        </div>
+      ) : null}
 
       <main className="room-layout">
         <section className="browser-panel">
