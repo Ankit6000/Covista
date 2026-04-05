@@ -3,7 +3,8 @@ const path = require("path");
 
 const isDev = !app.isPackaged;
 const rendererUrl = process.env.ELECTRON_RENDERER_URL || "http://127.0.0.1:5173";
-const hostedWebAppUrl = process.env.HOSTED_WEB_APP_URL || "";
+const packagedHostedWebAppUrl = "https://covista-4hyb.onrender.com";
+const hostedWebAppUrl = process.env.HOSTED_WEB_APP_URL || (app.isPackaged ? packagedHostedWebAppUrl : "");
 const useHostedMode = Boolean(hostedWebAppUrl);
 const backendBaseUrl = useHostedMode ? hostedWebAppUrl.replace(/\/+$/, "") : "http://127.0.0.1:3001";
 

@@ -127,11 +127,32 @@ This is the easiest way to validate the deployed web app + desktop host flow.
 
 Package the Electron host app and publish it through GitHub Releases or an installer.
 
-For production distribution, the packaged host app should launch with:
+This repo now includes Windows packaging with `electron-builder`.
 
-- `HOSTED_WEB_APP_URL=https://your-render-app.onrender.com`
+Build the desktop app:
 
-That lets the desktop host app open the deployed website while still exposing the Electron host-browser controls.
+```bash
+npm install
+npm run package:desktop
+```
+
+Output files are created in:
+
+- `release/`
+
+The default package flow creates a Windows portable app (`.exe`) you can share directly.
+
+The packaged app is preconfigured to open:
+
+- `https://covista-4hyb.onrender.com`
+
+It also registers the custom `covista://` room-link protocol so the website can hand rooms off to the desktop app.
+
+Recommended release flow:
+
+1. Run `npm run package:desktop`
+2. Upload the generated portable `.exe` file from `release/` to GitHub Releases
+3. Keep the website download button pointing to your Releases page
 
 ## Recommended deployment stack
 
