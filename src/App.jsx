@@ -142,6 +142,10 @@ function getDesktopLaunchUrl(roomId, name = "") {
   if (name) {
     params.set("name", name);
   }
+  const hostKey = window.localStorage.getItem(`watchparty-host-key:${roomId}`);
+  if (hostKey) {
+    params.set("hostKey", hostKey);
+  }
   return `covista://host?${params.toString()}`;
 }
 
@@ -202,6 +206,7 @@ function App() {
   const [hostPromptOpen, setHostPromptOpen] = useState(false);
   const [pendingRoomId, setPendingRoomId] = useState("");
   const [pendingHostName, setPendingHostName] = useState("");
+  const [pendingHostKey, setPendingHostKey] = useState("");
 
   const localVideoRef = useRef(null);
   const remoteVideoRefs = useRef(new Map());
@@ -411,7 +416,7 @@ function App() {
       }));
     });
 
-    const unsubscribeLaunchRoom = desktopHost.onLaunchRoom(({ roomId: nextRoomId, username: nextUsername }) => {
+    const unsubscribeLaunchRoom = desktopHost.onLaunchRoom(({ roomId: nextRoomId, username: nextUsername, hostKey: nextHostKey }) => {
       if (!nextRoomId) {
         return;
       }
@@ -421,6 +426,9 @@ function App() {
         window.localStorage.setItem("watchparty-name", effectiveName);
         setDraftName(effectiveName);
         setUsername(effectiveName);
+      }
+      if (nextHostKey) {
+        window.localStorage.setItem(`watchparty-host-key:${nextRoomId}`, nextHostKey);
       }
 
       stopDesktopBrowserStream();
@@ -445,6 +453,7 @@ function App() {
       setJoinRoomInput(nextRoomId);
       setPendingRoomId("");
       setPendingHostName("");
+      setPendingHostKey("");
       setError("");
       setDesktopLaunchHint("");
       setHostPromptOpen(false);
@@ -471,7 +480,8 @@ function App() {
     nextSocket.on("connect", () => {
       nextSocket.emit("join-room", {
         roomId,
-        username
+        username,
+        hostKey: window.localStorage.getItem(`watchparty-host-key:${roomId}`) || undefined
       });
     });
 
@@ -694,6 +704,10 @@ function App() {
       const data = await response.json();
       setPendingHostName(cleanName);
       setPendingRoomId(data.roomId);
+      setPendingHostKey(data.hostKey || "");
+      if (data.hostKey) {
+        window.localStorage.setItem(`watchparty-host-key:${data.roomId}`, data.hostKey);
+      }
       setError("");
       setDesktopLaunchHint("");
       setHostPromptOpen(true);
@@ -729,6 +743,9 @@ function App() {
   async function openDesktopHostApp() {
     const nextRoomId = pendingRoomId || roomId;
     const nextHostName = pendingHostName || draftName.trim() || username;
+    if (pendingHostKey && nextRoomId) {
+      window.localStorage.setItem(`watchparty-host-key:${nextRoomId}`, pendingHostKey);
+    }
 
     if (!nextRoomId) {
       setDesktopLaunchHint("Create a room first, then launch the desktop host app.");
@@ -750,25 +767,6 @@ function App() {
     window.setTimeout(() => {
       setDesktopLaunchHint("If the desktop app did not open, install it first from GitHub Releases, then try again.");
     }, 1600);
-  }
-
-  function continueOnWebsiteHosting() {
-    const nextRoomId = pendingRoomId || roomId;
-    const nextHostName = (pendingHostName || draftName || username).trim();
-    if (!nextRoomId || !nextHostName) {
-      setError("Could not continue into the room yet.");
-      return;
-    }
-
-    window.localStorage.setItem("watchparty-name", nextHostName);
-    setDraftName(nextHostName);
-    setUsername(nextHostName);
-    setRoomId(nextRoomId);
-    setJoinRoomInput(nextRoomId);
-    setPendingRoomId("");
-    setPendingHostName("");
-    setDesktopLaunchHint("");
-    setHostPromptOpen(false);
   }
 
   function sendChatMessage(event) {
@@ -1694,9 +1692,6 @@ function App() {
                   </a>
                 </div>
                 {desktopLaunchHint ? <div className="desktop-handoff-note">{desktopLaunchHint}</div> : null}
-                <button className="host-choice-dismiss" type="button" onClick={continueOnWebsiteHosting}>
-                  Continue on website
-                </button>
               </div>
             </div>
           ) : null}

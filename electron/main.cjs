@@ -30,6 +30,7 @@ function parseLaunchRoom(urlString) {
     const url = new URL(urlString);
     const roomId = (url.searchParams.get("room") || "").trim().toUpperCase();
     const username = String(url.searchParams.get("name") || "").trim().slice(0, 32);
+    const hostKey = String(url.searchParams.get("hostKey") || "").trim();
     if (!roomId) {
       return null;
     }
@@ -37,6 +38,7 @@ function parseLaunchRoom(urlString) {
     return {
       roomId,
       username,
+      hostKey,
       source: urlString
     };
   } catch (_error) {

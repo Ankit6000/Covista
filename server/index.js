@@ -46,6 +46,10 @@ function createRoomId() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
 }
 
+function createHostKey() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
 function serializeParticipant(participant) {
   return {
     id: participant.id,
@@ -158,6 +162,7 @@ app.post("/api/rooms", (_req, res) => {
   rooms.set(roomId, {
     id: roomId,
     ownerId: null,
+    ownerKey: createHostKey(),
     controllerId: null,
     controlRequests: [],
     participants: new Map(),
@@ -173,7 +178,7 @@ app.post("/api/rooms", (_req, res) => {
     }
   });
 
-  res.json({ roomId });
+  res.json({ roomId, hostKey: rooms.get(roomId).ownerKey });
 });
 
 app.get("/api/rooms/:roomId/control", (req, res) => {
@@ -353,7 +358,7 @@ app.get("*", (req, res, next) => {
 });
 
 io.on("connection", (socket) => {
-  socket.on("join-room", ({ roomId, username }) => {
+  socket.on("join-room", ({ roomId, username, hostKey }) => {
     const room = ensureRoom(roomId);
     if (!room) {
       socket.emit("room-error", { message: "Room not found." });
@@ -361,16 +366,18 @@ io.on("connection", (socket) => {
     }
 
     const cleanName = String(username || "Guest").trim().slice(0, 32) || "Guest";
-    const isFirstParticipant = room.participants.size === 0;
+    const isHostJoin = Boolean(room.ownerKey && hostKey && room.ownerKey === hostKey);
+    const isFirstParticipant = room.participants.size === 0 && !room.ownerId;
+    const shouldOwnRoom = isHostJoin || isFirstParticipant;
     const participant = {
       id: socket.id,
       username: cleanName,
-      isOwner: isFirstParticipant,
+      isOwner: shouldOwnRoom,
       joinedAt: Date.now()
     };
 
     room.participants.set(socket.id, participant);
-    if (isFirstParticipant) {
+    if (shouldOwnRoom) {
       room.ownerId = socket.id;
     }
 
@@ -384,7 +391,8 @@ io.on("connection", (socket) => {
       controlRequests: room.controlRequests,
       participants: getParticipants(room),
       browserState: room.browserState,
-      chat: room.chat
+      chat: room.chat,
+      hostReclaimed: isHostJoin
     });
 
     socket.to(roomId).emit("participant-joined", {
@@ -645,11 +653,7 @@ io.on("connection", (socket) => {
     room.participants.delete(socket.id);
 
     if (room.ownerId === socket.id) {
-      const nextOwner = room.participants.values().next().value;
-      room.ownerId = nextOwner ? nextOwner.id : null;
-      if (nextOwner) {
-        nextOwner.isOwner = true;
-      }
+      room.ownerId = null;
     }
 
     room.controlRequests = room.controlRequests.filter((id) => id !== socket.id);
