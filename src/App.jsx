@@ -208,6 +208,10 @@ function App() {
   const [pendingHostName, setPendingHostName] = useState("");
   const [pendingHostKey, setPendingHostKey] = useState("");
   const [hostKey, setHostKey] = useState("");
+  const [hostDebug, setHostDebug] = useState({
+    roomStateOwnerId: null,
+    roomStateHostReclaimed: false
+  });
 
   const localVideoRef = useRef(null);
   const remoteVideoRefs = useRef(new Map());
@@ -512,6 +516,10 @@ function App() {
       setOwnerId(state.ownerId);
       setControllerId(state.controllerId || null);
       setControlRequests(state.controlRequests || []);
+      setHostDebug({
+        roomStateOwnerId: state.ownerId || null,
+        roomStateHostReclaimed: Boolean(state.hostReclaimed)
+      });
       setBrowserState(state.browserState);
       setBrowserInput(state.browserState.query || state.browserState.url || "");
       setBrowserWarning(state.browserState.status?.startsWith("desktop-") ? "" : getEmbedWarning(state.browserState.url));
@@ -524,6 +532,10 @@ function App() {
       setOwnerId(state.ownerId);
       setControllerId(state.controllerId || null);
       setControlRequests(state.controlRequests || []);
+      setHostDebug((current) => ({
+        ...current,
+        roomStateOwnerId: state.ownerId || null
+      }));
     });
 
     nextSocket.on("participant-joined", async ({ participant }) => {
@@ -1887,6 +1899,10 @@ function App() {
               <span>Role: host</span>
               <span>Browser peer: {browserConnectionDebug.connectionState}</span>
               <span>ICE: {browserConnectionDebug.iceConnectionState}</span>
+              <span>Host key: {hostKey ? "present" : "missing"}</span>
+              <span>Self: {selfId || "none"}</span>
+              <span>Owner: {ownerId || "none"}</span>
+              <span>Room reclaim: {hostDebug.roomStateHostReclaimed ? "yes" : "no"}</span>
             </div>
           ) : null}
 
