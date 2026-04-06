@@ -207,6 +207,7 @@ function App() {
   const [pendingRoomId, setPendingRoomId] = useState("");
   const [pendingHostName, setPendingHostName] = useState("");
   const [pendingHostKey, setPendingHostKey] = useState("");
+  const [hostKey, setHostKey] = useState("");
 
   const localVideoRef = useRef(null);
   const remoteVideoRefs = useRef(new Map());
@@ -221,13 +222,14 @@ function App() {
   const roomPageRef = useRef(null);
   const socketRef = useRef(null);
   const roomIdRef = useRef(roomId);
+  const hostKeyRef = useRef(hostKey);
   const requestedBrowserQualityRef = useRef(new Map());
   const browserInteractionRef = useRef(null);
 
   const selfId = socket?.id || null;
   const shouldHoldRoomEntry = hostPromptOpen && !desktopHost;
   const activeRoomId = roomId || pendingRoomId;
-  const hasStoredHostClaim = Boolean(activeRoomId && window.localStorage.getItem(`watchparty-host-key:${activeRoomId}`));
+  const hasStoredHostClaim = Boolean(hostKey);
   const isOwner = Boolean((selfId && ownerId === selfId) || (desktopHost && hasStoredHostClaim));
   const hasBrowserControl = Boolean(selfId && (selfId === ownerId || selfId === controllerId));
   const invitationLink = activeRoomId ? `${window.location.origin}?room=${activeRoomId}` : "";
@@ -276,6 +278,20 @@ function App() {
 
   useEffect(() => {
     roomIdRef.current = roomId;
+  }, [roomId]);
+
+  useEffect(() => {
+    hostKeyRef.current = hostKey;
+  }, [hostKey]);
+
+  useEffect(() => {
+    if (!roomId) {
+      setHostKey("");
+      return;
+    }
+
+    const storedHostKey = window.localStorage.getItem(`watchparty-host-key:${roomId}`) || "";
+    setHostKey(storedHostKey);
   }, [roomId]);
 
   useEffect(() => {
@@ -430,6 +446,7 @@ function App() {
       }
       if (nextHostKey) {
         window.localStorage.setItem(`watchparty-host-key:${nextRoomId}`, nextHostKey);
+        setHostKey(nextHostKey);
       }
 
       stopDesktopBrowserStream();
@@ -482,7 +499,7 @@ function App() {
       nextSocket.emit("join-room", {
         roomId,
         username,
-        hostKey: window.localStorage.getItem(`watchparty-host-key:${roomId}`) || undefined
+        hostKey: hostKeyRef.current || undefined
       });
     });
 
@@ -708,6 +725,7 @@ function App() {
       setPendingHostKey(data.hostKey || "");
       if (data.hostKey) {
         window.localStorage.setItem(`watchparty-host-key:${data.roomId}`, data.hostKey);
+        setHostKey(data.hostKey);
       }
       setError("");
       setDesktopLaunchHint("");
