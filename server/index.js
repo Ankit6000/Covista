@@ -399,6 +399,7 @@ io.on("connection", (socket) => {
     socket.emit("room-state", {
       roomId,
       ownerId: room.ownerId,
+      ownerKey: shouldOwnRoom ? room.ownerKey : null,
       controllerId: room.controllerId,
       controlRequests: room.controlRequests,
       participants: getParticipants(room),

@@ -512,6 +512,10 @@ function App() {
     });
 
     nextSocket.on("room-state", (state) => {
+      if (state.ownerKey && roomIdRef.current) {
+        window.localStorage.setItem(`watchparty-host-key:${roomIdRef.current}`, state.ownerKey);
+        setHostKey(state.ownerKey);
+      }
       setParticipants(state.participants);
       setOwnerId(state.ownerId);
       setControllerId(state.controllerId || null);
