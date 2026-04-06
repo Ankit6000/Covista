@@ -136,8 +136,13 @@ function getEmbedWarning(url) {
   return "";
 }
 
-function getDesktopLaunchUrl(roomId) {
-  return `covista://host?room=${encodeURIComponent(roomId)}`;
+function getDesktopLaunchUrl(roomId, name = "") {
+  const params = new URLSearchParams();
+  params.set("room", roomId);
+  if (name) {
+    params.set("name", name);
+  }
+  return `covista://host?${params.toString()}`;
 }
 
 function App() {
@@ -195,6 +200,8 @@ function App() {
   });
   const [desktopLaunchHint, setDesktopLaunchHint] = useState("");
   const [hostPromptOpen, setHostPromptOpen] = useState(false);
+  const [pendingRoomId, setPendingRoomId] = useState("");
+  const [pendingHostName, setPendingHostName] = useState("");
 
   const localVideoRef = useRef(null);
   const remoteVideoRefs = useRef(new Map());
@@ -216,7 +223,8 @@ function App() {
   const shouldHoldRoomEntry = hostPromptOpen && !desktopHost;
   const isOwner = selfId && ownerId === selfId;
   const hasBrowserControl = Boolean(selfId && (selfId === ownerId || selfId === controllerId));
-  const invitationLink = roomId ? `${window.location.origin}?room=${roomId}` : "";
+  const activeRoomId = roomId || pendingRoomId;
+  const invitationLink = activeRoomId ? `${window.location.origin}?room=${activeRoomId}` : "";
   const controllerParticipant = controllerId ? participants.find((participant) => participant.id === controllerId) : null;
   const controllerDisplayName = controllerParticipant ? controllerParticipant.username : null;
   const peopleCountLabel = `${participants.length} joined`;
@@ -403,13 +411,40 @@ function App() {
       }));
     });
 
-    const unsubscribeLaunchRoom = desktopHost.onLaunchRoom(({ roomId: nextRoomId }) => {
+    const unsubscribeLaunchRoom = desktopHost.onLaunchRoom(({ roomId: nextRoomId, username: nextUsername }) => {
       if (!nextRoomId) {
         return;
       }
 
+      const effectiveName = String(nextUsername || draftName || window.localStorage.getItem("watchparty-name") || "").trim();
+      if (effectiveName) {
+        window.localStorage.setItem("watchparty-name", effectiveName);
+        setDraftName(effectiveName);
+        setUsername(effectiveName);
+      }
+
+      stopDesktopBrowserStream();
+      setParticipants([]);
+      setOwnerId(null);
+      setControllerId(null);
+      setControlRequests([]);
+      setMessages([]);
+      setBrowserInput("");
+      setBrowserWarning("");
+      setBrowserState({
+        url: "",
+        query: "",
+        status: "ready",
+        updatedAt: null,
+        frame: null,
+        aspectRatio: 16 / 9
+      });
+      browserRemoteStreamRef.current = null;
+      setBrowserRemoteReady(false);
       setRoomId(nextRoomId);
       setJoinRoomInput(nextRoomId);
+      setPendingRoomId("");
+      setPendingHostName("");
       setError("");
       setDesktopLaunchHint("");
       setHostPromptOpen(false);
@@ -657,10 +692,8 @@ function App() {
         method: "POST"
       });
       const data = await response.json();
-      window.localStorage.setItem("watchparty-name", cleanName);
-      setUsername(cleanName);
-      setRoomId(data.roomId);
-      setJoinRoomInput(data.roomId);
+      setPendingHostName(cleanName);
+      setPendingRoomId(data.roomId);
       setError("");
       setDesktopLaunchHint("");
       setHostPromptOpen(true);
@@ -694,12 +727,15 @@ function App() {
   }
 
   async function openDesktopHostApp() {
-    if (!roomId) {
+    const nextRoomId = pendingRoomId || roomId;
+    const nextHostName = pendingHostName || draftName.trim() || username;
+
+    if (!nextRoomId) {
       setDesktopLaunchHint("Create a room first, then launch the desktop host app.");
       return;
     }
 
-    const deepLink = getDesktopLaunchUrl(roomId);
+    const deepLink = getDesktopLaunchUrl(nextRoomId, nextHostName);
 
     if (desktopHost) {
       const result = await desktopHost.openDeepLink(deepLink);
@@ -714,6 +750,25 @@ function App() {
     window.setTimeout(() => {
       setDesktopLaunchHint("If the desktop app did not open, install it first from GitHub Releases, then try again.");
     }, 1600);
+  }
+
+  function continueOnWebsiteHosting() {
+    const nextRoomId = pendingRoomId || roomId;
+    const nextHostName = (pendingHostName || draftName || username).trim();
+    if (!nextRoomId || !nextHostName) {
+      setError("Could not continue into the room yet.");
+      return;
+    }
+
+    window.localStorage.setItem("watchparty-name", nextHostName);
+    setDraftName(nextHostName);
+    setUsername(nextHostName);
+    setRoomId(nextRoomId);
+    setJoinRoomInput(nextRoomId);
+    setPendingRoomId("");
+    setPendingHostName("");
+    setDesktopLaunchHint("");
+    setHostPromptOpen(false);
   }
 
   function sendChatMessage(event) {
@@ -1639,7 +1694,7 @@ function App() {
                   </a>
                 </div>
                 {desktopLaunchHint ? <div className="desktop-handoff-note">{desktopLaunchHint}</div> : null}
-                <button className="host-choice-dismiss" type="button" onClick={() => setHostPromptOpen(false)}>
+                <button className="host-choice-dismiss" type="button" onClick={continueOnWebsiteHosting}>
                   Continue on website
                 </button>
               </div>
