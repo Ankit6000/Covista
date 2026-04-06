@@ -226,10 +226,10 @@ function App() {
 
   const selfId = socket?.id || null;
   const shouldHoldRoomEntry = hostPromptOpen && !desktopHost;
+  const activeRoomId = roomId || pendingRoomId;
   const hasStoredHostClaim = Boolean(activeRoomId && window.localStorage.getItem(`watchparty-host-key:${activeRoomId}`));
   const isOwner = Boolean((selfId && ownerId === selfId) || (desktopHost && hasStoredHostClaim));
   const hasBrowserControl = Boolean(selfId && (selfId === ownerId || selfId === controllerId));
-  const activeRoomId = roomId || pendingRoomId;
   const invitationLink = activeRoomId ? `${window.location.origin}?room=${activeRoomId}` : "";
   const controllerParticipant = controllerId ? participants.find((participant) => participant.id === controllerId) : null;
   const controllerDisplayName = controllerParticipant ? controllerParticipant.username : null;
