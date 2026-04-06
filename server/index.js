@@ -163,6 +163,7 @@ app.post("/api/rooms", (_req, res) => {
     id: roomId,
     ownerId: null,
     ownerKey: createHostKey(),
+    ownerName: null,
     controllerId: null,
     controlRequests: [],
     participants: new Map(),
@@ -366,7 +367,9 @@ io.on("connection", (socket) => {
     }
 
     const cleanName = String(username || "Guest").trim().slice(0, 32) || "Guest";
-    const isHostJoin = Boolean(room.ownerKey && hostKey && room.ownerKey === hostKey);
+    const isHostJoin =
+      Boolean(room.ownerKey && hostKey && room.ownerKey === hostKey) ||
+      Boolean(!room.ownerId && room.ownerName && room.ownerName === cleanName);
     const isFirstParticipant = room.participants.size === 0 && !room.ownerId;
     const shouldOwnRoom = isHostJoin || isFirstParticipant;
     const participant = {
@@ -379,6 +382,7 @@ io.on("connection", (socket) => {
     room.participants.set(socket.id, participant);
     if (shouldOwnRoom) {
       room.ownerId = socket.id;
+      room.ownerName = cleanName;
     }
 
     socket.join(roomId);
