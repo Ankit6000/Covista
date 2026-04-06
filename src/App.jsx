@@ -213,6 +213,7 @@ function App() {
   const browserInteractionRef = useRef(null);
 
   const selfId = socket?.id || null;
+  const shouldHoldRoomEntry = hostPromptOpen && !desktopHost;
   const isOwner = selfId && ownerId === selfId;
   const hasBrowserControl = Boolean(selfId && (selfId === ownerId || selfId === controllerId));
   const invitationLink = roomId ? `${window.location.origin}?room=${roomId}` : "";
@@ -421,7 +422,7 @@ function App() {
   }, [desktopHost]);
 
   useEffect(() => {
-    if (!roomId || !username || !rtcConfigReady) {
+    if (!roomId || !username || !rtcConfigReady || shouldHoldRoomEntry) {
       return undefined;
     }
 
@@ -564,7 +565,7 @@ function App() {
       browserPeersRef.current.forEach((_, participantId) => removeBrowserPeer(participantId));
       setSocket(null);
     };
-  }, [roomId, username, rtcConfigReady]);
+  }, [roomId, username, rtcConfigReady, shouldHoldRoomEntry]);
 
   useEffect(() => {
     if (!socketRef.current || !roomId || isOwner) {
@@ -578,7 +579,7 @@ function App() {
   }, [receiverQuality, roomId, isOwner]);
 
   useEffect(() => {
-    if (!roomId) {
+    if (!roomId || shouldHoldRoomEntry) {
       return undefined;
     }
 
@@ -609,7 +610,7 @@ function App() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [roomId]);
+  }, [roomId, shouldHoldRoomEntry]);
 
   useEffect(() => {
     if (browserPreviewRef.current) {
@@ -1555,7 +1556,7 @@ function App() {
     browserPeersRef.current.delete(participantId);
   }
 
-  if (!roomId || !username) {
+  if (!roomId || !username || shouldHoldRoomEntry) {
     return (
       <div className="page-shell">
         <div className="ambient ambient-left" />
@@ -1619,6 +1620,31 @@ function App() {
               <span>WebRTC camera, mic, and screen share controls.</span>
             </div>
           </div>
+
+          {hostPromptOpen && !desktopHost ? (
+            <div className="host-choice-overlay" role="dialog" aria-modal="true">
+              <div className="host-choice-modal">
+                <span className="eyebrow">Host this room</span>
+                <h3>Use the desktop app for the real shared browser</h3>
+                <p>
+                  Guests can stay on the website. To host the real synced browser session, open the desktop app for this
+                  room.
+                </p>
+                <div className="host-choice-actions">
+                  <button className="primary-btn" type="button" onClick={openDesktopHostApp}>
+                    Host With Desktop App
+                  </button>
+                  <a className="secondary-link-btn" href={DESKTOP_APP_DOWNLOAD_URL} target="_blank" rel="noreferrer">
+                    Download App
+                  </a>
+                </div>
+                {desktopLaunchHint ? <div className="desktop-handoff-note">{desktopLaunchHint}</div> : null}
+                <button className="host-choice-dismiss" type="button" onClick={() => setHostPromptOpen(false)}>
+                  Continue on website
+                </button>
+              </div>
+            </div>
+          ) : null}
         </section>
       </div>
     );
@@ -1662,31 +1688,6 @@ function App() {
             </a>
           </div>
           {desktopLaunchHint ? <div className="desktop-handoff-note">{desktopLaunchHint}</div> : null}
-        </div>
-      ) : null}
-
-      {hostPromptOpen && !desktopHost ? (
-        <div className="host-choice-overlay" role="dialog" aria-modal="true">
-          <div className="host-choice-modal">
-            <span className="eyebrow">Host this room</span>
-            <h3>Use the desktop app for the real shared browser</h3>
-            <p>
-              Guests can stay on the website. To host the real synced browser session, open the desktop app for this
-              room.
-            </p>
-            <div className="host-choice-actions">
-              <button className="primary-btn" type="button" onClick={openDesktopHostApp}>
-                Host With Desktop App
-              </button>
-              <a className="secondary-link-btn" href={DESKTOP_APP_DOWNLOAD_URL} target="_blank" rel="noreferrer">
-                Download App
-              </a>
-            </div>
-            {desktopLaunchHint ? <div className="desktop-handoff-note">{desktopLaunchHint}</div> : null}
-            <button className="host-choice-dismiss" type="button" onClick={() => setHostPromptOpen(false)}>
-              Continue on website
-            </button>
-          </div>
         </div>
       ) : null}
 
