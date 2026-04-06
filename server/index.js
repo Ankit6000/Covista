@@ -369,7 +369,7 @@ io.on("connection", (socket) => {
     const cleanName = String(username || "Guest").trim().slice(0, 32) || "Guest";
     const isHostJoin =
       Boolean(room.ownerKey && hostKey && room.ownerKey === hostKey) ||
-      Boolean(!room.ownerId && room.ownerName && room.ownerName === cleanName);
+      Boolean(room.ownerName && room.ownerName === cleanName);
     const isFirstParticipant = room.participants.size === 0 && !room.ownerId;
     const shouldOwnRoom = isHostJoin || isFirstParticipant;
     const participant = {
