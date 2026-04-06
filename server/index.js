@@ -67,6 +67,13 @@ function getParticipants(room) {
   return Array.from(room.participants.values()).map(serializeParticipant);
 }
 
+function isSocketRoomOwner(socket, room) {
+  return Boolean(
+    (room.ownerId && room.ownerId === socket.id) ||
+      (room.ownerKey && socket.data.hostKey && room.ownerKey === socket.data.hostKey)
+  );
+}
+
 function getStaticIceServers() {
   const urls = String(process.env.TURN_URLS || "")
     .split(",")
@@ -387,6 +394,7 @@ io.on("connection", (socket) => {
 
     socket.join(roomId);
     socket.data.roomId = roomId;
+    socket.data.hostKey = hostKey || null;
 
     socket.emit("room-state", {
       roomId,
@@ -440,7 +448,7 @@ io.on("connection", (socket) => {
 
   socket.on("browser-update", ({ roomId, url, query, status, aspectRatio }, ack) => {
     const room = ensureRoom(roomId);
-    if (!room || room.ownerId !== socket.id) {
+    if (!room || !isSocketRoomOwner(socket, room)) {
       ack?.({ ok: false });
       return;
     }
@@ -465,7 +473,7 @@ io.on("connection", (socket) => {
       ack?.({ ok: false, reason: "room-not-found" });
       return;
     }
-    if (room.ownerId !== socket.id) {
+    if (!isSocketRoomOwner(socket, room)) {
       socket.emit("browser-frame-reject", {
         reason: "not-owner",
         roomId,
@@ -502,7 +510,7 @@ io.on("connection", (socket) => {
       ack?.({ ok: false, reason: "debug-room-not-found" });
       return;
     }
-    if (room.ownerId !== socket.id) {
+    if (!isSocketRoomOwner(socket, room)) {
       socket.emit("browser-frame-reject", {
         reason: "debug-not-owner",
         roomId,
@@ -539,7 +547,7 @@ io.on("connection", (socket) => {
 
   socket.on("browser-quality-request", ({ roomId, quality }) => {
     const room = ensureRoom(roomId);
-    if (!room || !room.participants.has(socket.id) || !room.ownerId || room.ownerId === socket.id) {
+    if (!room || !room.participants.has(socket.id) || !room.ownerId || isSocketRoomOwner(socket, room)) {
       return;
     }
 
@@ -551,7 +559,7 @@ io.on("connection", (socket) => {
 
   socket.on("request-browser-control", ({ roomId }, ack) => {
     const room = ensureRoom(roomId);
-    if (!room || !room.participants.has(socket.id) || room.ownerId === socket.id) {
+    if (!room || !room.participants.has(socket.id) || isSocketRoomOwner(socket, room)) {
       ack?.({ ok: false });
       return;
     }
@@ -569,7 +577,7 @@ io.on("connection", (socket) => {
 
   socket.on("approve-browser-control", ({ roomId, requesterId }, ack) => {
     const room = ensureRoom(roomId);
-    if (!room || room.ownerId !== socket.id || !room.participants.has(requesterId)) {
+    if (!room || !isSocketRoomOwner(socket, room) || !room.participants.has(requesterId)) {
       ack?.({ ok: false });
       return;
     }
@@ -590,7 +598,7 @@ io.on("connection", (socket) => {
       ack?.({ ok: false, reason: "room-not-found" });
       return;
     }
-    if (room.ownerId !== socket.id) {
+    if (!isSocketRoomOwner(socket, room)) {
       ack?.({ ok: false, reason: "owner-mismatch" });
       return;
     }
@@ -606,12 +614,12 @@ io.on("connection", (socket) => {
 
   socket.on("release-browser-control", ({ roomId }, ack) => {
     const room = ensureRoom(roomId);
-    if (!room || (room.ownerId !== socket.id && room.controllerId !== socket.id)) {
+    if (!room || (!isSocketRoomOwner(socket, room) && room.controllerId !== socket.id)) {
       ack?.({ ok: false });
       return;
     }
 
-    if (room.controllerId === socket.id || room.ownerId === socket.id) {
+    if (room.controllerId === socket.id || isSocketRoomOwner(socket, room)) {
       room.controllerId = null;
     }
 
@@ -630,7 +638,7 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const allowed = socket.id === room.ownerId || socket.id === room.controllerId;
+    const allowed = isSocketRoomOwner(socket, room) || socket.id === room.controllerId;
     if (!allowed || !room.ownerId) {
       return;
     }
