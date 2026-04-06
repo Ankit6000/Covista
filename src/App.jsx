@@ -136,13 +136,13 @@ function getEmbedWarning(url) {
   return "";
 }
 
-function getDesktopLaunchUrl(roomId, name = "") {
+function getDesktopLaunchUrl(roomId, name = "", explicitHostKey = "") {
   const params = new URLSearchParams();
   params.set("room", roomId);
   if (name) {
     params.set("name", name);
   }
-  const hostKey = window.localStorage.getItem(`watchparty-host-key:${roomId}`);
+  const hostKey = explicitHostKey || window.localStorage.getItem(`watchparty-host-key:${roomId}`);
   if (hostKey) {
     params.set("hostKey", hostKey);
   }
@@ -774,8 +774,10 @@ function App() {
   async function openDesktopHostApp() {
     const nextRoomId = pendingRoomId || roomId;
     const nextHostName = pendingHostName || draftName.trim() || username;
-    if (pendingHostKey && nextRoomId) {
-      window.localStorage.setItem(`watchparty-host-key:${nextRoomId}`, pendingHostKey);
+    const nextHostKey = pendingHostKey || hostKey;
+    if (nextHostKey && nextRoomId) {
+      window.localStorage.setItem(`watchparty-host-key:${nextRoomId}`, nextHostKey);
+      setHostKey(nextHostKey);
     }
 
     if (!nextRoomId) {
@@ -783,7 +785,7 @@ function App() {
       return;
     }
 
-    const deepLink = getDesktopLaunchUrl(nextRoomId, nextHostName);
+    const deepLink = getDesktopLaunchUrl(nextRoomId, nextHostName, nextHostKey);
 
     if (desktopHost) {
       const result = await desktopHost.openDeepLink(deepLink);
@@ -1892,11 +1894,11 @@ function App() {
             <span>Last update: {browserState.updatedAt ? formatTime(browserState.updatedAt) : "--:--"}</span>
           </div>
 
-          {desktopHost && isOwner ? (
+          {desktopHost ? (
             <div className="desktop-debug">
               <span>{browserStreamReady ? "Desktop browser live stream active" : "Desktop browser live stream idle"}</span>
               <span>Socket: {socketRef.current?.connected ? "connected" : "not connected"}</span>
-              <span>Role: host</span>
+              <span>Role: {isOwner ? "host" : "watcher"}</span>
               <span>Browser peer: {browserConnectionDebug.connectionState}</span>
               <span>ICE: {browserConnectionDebug.iceConnectionState}</span>
               <span>Host key: {hostKey ? "present" : "missing"}</span>
