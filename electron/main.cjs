@@ -76,6 +76,61 @@ function sendToRenderer(channel, payload) {
   }
 }
 
+function getHostErrorPage(title, message, details = "") {
+  return `data:text/html;charset=UTF-8,${encodeURIComponent(`<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>${title}</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #07111f;
+        color: #f4f7fb;
+        font-family: Segoe UI, Arial, sans-serif;
+      }
+      .card {
+        width: min(720px, calc(100vw - 48px));
+        padding: 32px;
+        border-radius: 24px;
+        background: rgba(12, 23, 41, 0.95);
+        border: 1px solid rgba(120, 155, 210, 0.22);
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 30px;
+      }
+      p {
+        margin: 0 0 10px;
+        line-height: 1.5;
+        color: #cfd8e6;
+      }
+      code {
+        display: block;
+        margin-top: 18px;
+        padding: 14px 16px;
+        border-radius: 14px;
+        background: #040b16;
+        color: #8dd6ff;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>${title}</h1>
+      <p>${message}</p>
+      ${details ? `<code>${details}</code>` : ""}
+    </div>
+  </body>
+</html>`)}`;
+}
+
 function stopHostAudioCapture() {
   if (!activeHostAudioProcessId) {
     return;
@@ -230,6 +285,41 @@ function attachHostWindowEvents() {
     event.preventDefault();
     emitHostState();
   });
+
+  hostWindow.webContents.on("did-fail-load", async (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    if (!isMainFrame || !hostWindow || hostWindow.isDestroyed()) {
+      return;
+    }
+
+    const isIgnorable = errorCode === -3;
+    if (isIgnorable) {
+      return;
+    }
+
+    await hostWindow.loadURL(
+      getHostErrorPage(
+        "Page failed to load",
+        "Covista could not open that page inside the desktop host browser.",
+        `${validatedURL || "Unknown URL"}\n${errorCode}: ${errorDescription || "Unknown navigation failure"}`
+      )
+    );
+    emitHostState();
+  });
+
+  hostWindow.webContents.on("render-process-gone", async (_event, details) => {
+    if (!hostWindow || hostWindow.isDestroyed()) {
+      return;
+    }
+
+    await hostWindow.loadURL(
+      getHostErrorPage(
+        "Browser crashed",
+        "The desktop host browser renderer stopped unexpectedly.",
+        `${details?.reason || "unknown"}`
+      )
+    );
+    emitHostState();
+  });
 }
 
 async function ensureHostWindow() {
@@ -250,8 +340,13 @@ async function ensureHostWindow() {
     }
   });
 
-  await hostWindow.loadURL("https://example.com");
   attachHostWindowEvents();
+  await hostWindow.loadURL(
+    getHostErrorPage(
+      "Host browser ready",
+      "Paste a URL in Covista and click Open Page to load a site into the shared browser."
+    )
+  );
   emitHostState();
   return hostWindow;
 }
