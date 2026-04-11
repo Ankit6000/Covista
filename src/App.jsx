@@ -230,7 +230,7 @@ function App() {
   const [browserVolume, setBrowserVolume] = useState(100);
   const [browserRemoteMuted, setBrowserRemoteMuted] = useState(() => shouldStartStreamMuted());
   const [theaterMode, setTheaterMode] = useState(false);
-  const [sidebarTab, setSidebarTab] = useState("call");
+  const [sidebarTab, setSidebarTab] = useState("chat");
   const [controlNotice, setControlNotice] = useState("");
   const [browserInteractionActive, setBrowserInteractionActive] = useState(false);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
@@ -2502,6 +2502,13 @@ function App() {
           <section className="panel sidebar-tabs-panel">
             <div className="sidebar-tabs">
               <button
+                className={`sidebar-tab ${sidebarTab === "chat" ? "active" : ""}`}
+                onClick={() => setSidebarTab("chat")}
+              >
+                <span>Chat</span>
+                {unreadChatCount > 0 ? <span className="tab-badge alert">{unreadChatCount}</span> : null}
+              </button>
+              <button
                 className={`sidebar-tab ${sidebarTab === "call" ? "active" : ""}`}
                 onClick={() => setSidebarTab("call")}
               >
@@ -2514,13 +2521,6 @@ function App() {
               >
                 <span>People</span>
                 <span className="tab-badge">{participants.length}</span>
-              </button>
-              <button
-                className={`sidebar-tab ${sidebarTab === "chat" ? "active" : ""}`}
-                onClick={() => setSidebarTab("chat")}
-              >
-                <span>Chat</span>
-                {unreadChatCount > 0 ? <span className="tab-badge alert">{unreadChatCount}</span> : null}
               </button>
             </div>
 
