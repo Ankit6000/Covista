@@ -1,6 +1,6 @@
 const { app, BrowserWindow, ipcMain, desktopCapturer, session } = require("electron");
 const path = require("path");
-const { startAudioCapture, stopAudioCapture } = require("application-loopback");
+const { startAudioCapture, stopAudioCapture, setExecutablesRoot } = require("application-loopback");
 
 const isDev = !app.isPackaged;
 const rendererUrl = process.env.ELECTRON_RENDERER_URL || "http://127.0.0.1:5173";
@@ -8,6 +8,10 @@ const packagedHostedWebAppUrl = "https://covista-4hyb.onrender.com";
 const hostedWebAppUrl = process.env.HOSTED_WEB_APP_URL || (app.isPackaged ? packagedHostedWebAppUrl : "");
 const useHostedMode = Boolean(hostedWebAppUrl);
 const backendBaseUrl = useHostedMode ? hostedWebAppUrl.replace(/\/+$/, "") : "http://127.0.0.1:3001";
+
+if (app.isPackaged) {
+  setExecutablesRoot(path.join(process.resourcesPath, "application-loopback-bin"));
+}
 
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
 app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");

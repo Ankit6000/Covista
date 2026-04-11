@@ -45,6 +45,12 @@
       "electron/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "node_modules/application-loopback/bin",
+        "to": "application-loopback-bin"
+      }
+    ],
     "protocols": [
       {
         "name": "Covista room links",
