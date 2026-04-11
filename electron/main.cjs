@@ -154,7 +154,7 @@ function syncHostAudioCapture() {
     };
   }
 
-  const processId = hostWindow.webContents.getOSProcessId();
+  const processId = process.pid;
   if (!processId) {
     return {
       ok: false,
