@@ -788,6 +788,7 @@ function App() {
       setBrowserWarning(state.browserState.status?.startsWith("desktop-") ? "" : getEmbedWarning(state.browserState.url));
       setMessages(state.chat);
       setUnreadChatCount(0);
+      void restoreActiveDesktopBrowserStream(nextSocket, state);
     });
 
     nextSocket.on("presence-update", (state) => {
@@ -819,6 +820,11 @@ function App() {
       setParticipants((current) => current.filter((item) => item.id !== participantId));
       removePeer(participantId);
       removeBrowserPeer(participantId);
+    });
+
+    nextSocket.on("disconnect", () => {
+      peersRef.current.forEach((_, participantId) => removePeer(participantId));
+      browserPeersRef.current.forEach((_, participantId) => removeBrowserPeer(participantId));
     });
 
     nextSocket.on("chat-message", (message) => {
@@ -1327,6 +1333,36 @@ function App() {
     if (browserRemoteVideoRef.current) {
       browserRemoteVideoRef.current.muted = nextValue;
       browserRemoteVideoRef.current.play().catch(() => {});
+    }
+  }
+
+  async function restoreActiveDesktopBrowserStream(activeSocket, roomState) {
+    if (!desktopHost || !activeSocket || !browserStreamRef.current) {
+      return;
+    }
+
+    if (!roomState?.ownerId || roomState.ownerId !== activeSocket.id) {
+      return;
+    }
+
+    browserPeersRef.current.forEach((_, participantId) => removeBrowserPeer(participantId));
+
+    const [videoTrack] = browserStreamRef.current.getVideoTracks();
+    activeSocket.emit("browser-update", {
+      roomId: roomIdRef.current,
+      url: desktopBrowserStateRef.current.url || browserState.url || browserInput,
+      query: browserInput,
+      status: "desktop-webrtc",
+      aspectRatio:
+        videoTrack?.getSettings().aspectRatio ||
+        (videoTrack?.getSettings().width && videoTrack?.getSettings().height
+          ? videoTrack.getSettings().width / videoTrack.getSettings().height
+          : browserState.aspectRatio || 16 / 9)
+    });
+
+    const participantsToReconnect = (roomState.participants || []).filter((participant) => participant.id !== activeSocket.id);
+    for (const participant of participantsToReconnect) {
+      await createBrowserOfferForParticipant(participant.id, activeSocket);
     }
   }
 
