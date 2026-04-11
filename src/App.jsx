@@ -172,6 +172,22 @@ function readStoredHostKey(roomId) {
   return window.localStorage.getItem(`watchparty-host-key:${roomId}`) || "";
 }
 
+function getClientKey() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  const storageKey = "watchparty-client-key";
+  const existing = window.localStorage.getItem(storageKey) || "";
+  if (existing) {
+    return existing;
+  }
+
+  const nextValue = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  window.localStorage.setItem(storageKey, nextValue);
+  return nextValue;
+}
+
 function App() {
   const desktopHost = window.desktopHost || null;
   const [username, setUsername] = useState("");
@@ -266,6 +282,7 @@ function App() {
   const socketRef = useRef(null);
   const roomIdRef = useRef(roomId);
   const hostKeyRef = useRef(hostKey);
+  const clientKeyRef = useRef(getClientKey());
   const desktopBrowserStateRef = useRef(desktopBrowserState);
   const browserStreamReadyRef = useRef(browserStreamReady);
   const requestedBrowserQualityRef = useRef(new Map());
@@ -297,7 +314,8 @@ function App() {
     activeSocket.emit("reclaim-room-owner", {
       roomId: targetRoomId,
       username,
-      hostKey: activeHostKey
+      hostKey: activeHostKey,
+      clientKey: clientKeyRef.current || undefined
     });
   }
 
@@ -788,7 +806,8 @@ function App() {
       nextSocket.emit("join-room", {
         roomId,
         username,
-        hostKey: activeHostKey || undefined
+        hostKey: activeHostKey || undefined,
+        clientKey: clientKeyRef.current || undefined
       });
       if (desktopHost && activeHostKey) {
         setOwnerId(nextSocket.id);
@@ -1908,6 +1927,12 @@ function App() {
       const [stream] = event.streams;
       browserRemoteStreamRef.current = stream;
       const nextMutedState = shouldStartStreamMuted();
+      if (browserRemoteVideoRef.current) {
+        browserRemoteVideoRef.current.srcObject = stream;
+        browserRemoteVideoRef.current.muted = nextMutedState;
+        browserRemoteVideoRef.current.volume = browserVolume / 100;
+        browserRemoteVideoRef.current.play().catch(() => {});
+      }
       setBrowserRemoteReady(true);
       setBrowserRemoteMuted(nextMutedState);
       setBrowserAudioDebug((current) => ({

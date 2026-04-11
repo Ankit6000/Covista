@@ -252,6 +252,7 @@ app.post("/api/rooms", (_req, res) => {
     ownerKey: createHostKey(),
     ownerName: null,
     controllerId: null,
+    controllerKey: null,
     controlRequests: [],
     participants: new Map(),
     chat: [],
@@ -446,7 +447,7 @@ app.get("*", (req, res, next) => {
 });
 
 io.on("connection", (socket) => {
-  socket.on("join-room", ({ roomId, username, hostKey }) => {
+  socket.on("join-room", ({ roomId, username, hostKey, clientKey }) => {
     const room = ensureRoom(roomId);
     if (!room) {
       socket.emit("room-error", { message: "Room not found." });
@@ -455,9 +456,11 @@ io.on("connection", (socket) => {
 
     const cleanName = String(username || "Guest").trim().slice(0, 32) || "Guest";
     const normalizedHostKey = String(hostKey || "").trim() || null;
+    const normalizedClientKey = String(clientKey || "").trim() || null;
     socket.data.roomId = roomId;
     socket.data.hostKey = normalizedHostKey;
     socket.data.username = cleanName;
+    socket.data.clientKey = normalizedClientKey;
     const isHostJoin =
       Boolean(room.ownerKey && normalizedHostKey && room.ownerKey === normalizedHostKey) ||
       Boolean(room.ownerName && room.ownerName === cleanName);
@@ -466,6 +469,7 @@ io.on("connection", (socket) => {
     const participant = {
       id: socket.id,
       username: cleanName,
+      clientKey: normalizedClientKey,
       isOwner: shouldOwnRoom,
       joinedAt: Date.now()
     };
@@ -474,6 +478,9 @@ io.on("connection", (socket) => {
     if (shouldOwnRoom) {
       room.ownerId = socket.id;
       room.ownerName = cleanName;
+    }
+    if (room.controllerKey && normalizedClientKey && room.controllerKey === normalizedClientKey) {
+      room.controllerId = socket.id;
     }
 
     socket.join(roomId);
@@ -697,7 +704,9 @@ io.on("connection", (socket) => {
       return;
     }
 
+    const requester = room.participants.get(requesterId);
     room.controllerId = requesterId;
+    room.controllerKey = requester?.clientKey || null;
     room.controlRequests = room.controlRequests.filter((id) => id !== requesterId);
 
     io.to(roomId).emit("browser-control-state", {
@@ -736,6 +745,7 @@ io.on("connection", (socket) => {
 
     if (room.controllerId === socket.id || isSocketRoomOwner(socket, room)) {
       room.controllerId = null;
+      room.controllerKey = null;
     }
 
     room.controlRequests = room.controlRequests.filter((id) => id !== socket.id);
