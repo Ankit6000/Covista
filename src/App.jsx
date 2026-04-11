@@ -228,6 +228,14 @@ function App() {
     roomStateOwnerId: null,
     roomStateHostReclaimed: false
   });
+  const [browserAudioDebug, setBrowserAudioDebug] = useState({
+    hostCaptureOk: false,
+    hostCaptureProcessId: null,
+    hostChunkCount: 0,
+    lastHostChunkAt: null,
+    hostAudioTrackReady: false,
+    guestAudioTrackCount: 0
+  });
 
   const localVideoRef = useRef(null);
   const remoteVideoRefs = useRef(new Map());
@@ -344,6 +352,11 @@ function App() {
     const usableLength = bytes.byteLength - (bytes.byteLength % 2);
     const copy = Uint8Array.from(bytes.slice(0, usableLength));
     browserAudioQueueRef.current.push(new Int16Array(copy.buffer));
+    setBrowserAudioDebug((current) => ({
+      ...current,
+      hostChunkCount: current.hostChunkCount + 1,
+      lastHostChunkAt: Date.now()
+    }));
 
     if (browserAudioQueueRef.current.length > 128) {
       browserAudioQueueRef.current.splice(0, browserAudioQueueRef.current.length - 96);
@@ -364,6 +377,12 @@ function App() {
       browserAudioContextRef.current.close().catch(() => {});
       browserAudioContextRef.current = null;
     }
+
+    setBrowserAudioDebug((current) => ({
+      ...current,
+      hostAudioTrackReady: false,
+      guestAudioTrackCount: 0
+    }));
   }
 
   async function ensureHostBrowserAudioTrack() {
@@ -378,8 +397,21 @@ function App() {
 
     const captureResult = await desktopHost.startHostBrowserAudioCapture();
     if (!captureResult?.ok) {
+      setBrowserAudioDebug((current) => ({
+        ...current,
+        hostCaptureOk: false,
+        hostCaptureProcessId: null,
+        hostAudioTrackReady: false
+      }));
       return null;
     }
+    setBrowserAudioDebug((current) => ({
+      ...current,
+      hostCaptureOk: true,
+      hostCaptureProcessId: captureResult.processId || null,
+      hostChunkCount: 0,
+      lastHostChunkAt: null
+    }));
 
     const audioContext = new window.AudioContext({ sampleRate: 48000 });
     const destination = audioContext.createMediaStreamDestination();
@@ -427,6 +459,10 @@ function App() {
     browserAudioDestinationRef.current = destination;
     browserAudioProcessorRef.current = processor;
     browserAudioMonitorGainRef.current = monitorGain;
+    setBrowserAudioDebug((current) => ({
+      ...current,
+      hostAudioTrackReady: true
+    }));
 
     return destination.stream.getAudioTracks()[0] || null;
   }
@@ -1787,6 +1823,10 @@ function App() {
       const nextMutedState = shouldStartStreamMuted();
       setBrowserRemoteReady(true);
       setBrowserRemoteMuted(nextMutedState);
+      setBrowserAudioDebug((current) => ({
+        ...current,
+        guestAudioTrackCount: stream?.getAudioTracks?.().length || 0
+      }));
       setBrowserConnectionDebug({
         role: "guest",
         connectionState: connection.connectionState,
@@ -2166,6 +2206,11 @@ function App() {
               <span>Role: {isOwner ? "host" : "watcher"}</span>
               <span>Browser peer: {browserConnectionDebug.connectionState}</span>
               <span>ICE: {browserConnectionDebug.iceConnectionState}</span>
+              <span>Host audio capture: {browserAudioDebug.hostCaptureOk ? "ok" : "idle"}</span>
+              <span>Host audio PID: {browserAudioDebug.hostCaptureProcessId || "none"}</span>
+              <span>Audio chunks: {browserAudioDebug.hostChunkCount}</span>
+              <span>Last audio chunk: {browserAudioDebug.lastHostChunkAt ? formatTime(browserAudioDebug.lastHostChunkAt) : "--:--"}</span>
+              <span>Audio track: {browserAudioDebug.hostAudioTrackReady ? "ready" : "missing"}</span>
               <span>Host key: {hostKey ? "present" : "missing"}</span>
               <span>Self: {selfId || "none"}</span>
               <span>Owner: {ownerId || "none"}</span>
@@ -2178,6 +2223,7 @@ function App() {
               <span>Browser peer: {browserConnectionDebug.connectionState}</span>
               <span>ICE: {browserConnectionDebug.iceConnectionState}</span>
               <span>Gathering: {browserConnectionDebug.iceGatheringState}</span>
+              <span>Audio tracks: {browserAudioDebug.guestAudioTrackCount}</span>
             </div>
           ) : null}
 
