@@ -771,12 +771,13 @@ function App() {
     });
 
     nextSocket.on("room-state", (state) => {
+      const effectiveOwnerId = desktopHost && hostKeyRef.current ? nextSocket.id : state.ownerId;
       if (state.ownerKey && roomIdRef.current) {
         window.localStorage.setItem(`watchparty-host-key:${roomIdRef.current}`, state.ownerKey);
         setHostKey(state.ownerKey);
       }
       setParticipants(state.participants);
-      setOwnerId(state.ownerId);
+      setOwnerId(effectiveOwnerId);
       setControllerId(state.controllerId || null);
       setControlRequests(state.controlRequests || []);
       setHostDebug({
@@ -792,8 +793,9 @@ function App() {
     });
 
     nextSocket.on("presence-update", (state) => {
+      const effectiveOwnerId = desktopHost && hostKeyRef.current ? nextSocket.id : state.ownerId;
       setParticipants(state.participants);
-      setOwnerId(state.ownerId);
+      setOwnerId(effectiveOwnerId);
       setControllerId(state.controllerId || null);
       setControlRequests(state.controlRequests || []);
       setHostDebug((current) => ({
@@ -1341,7 +1343,11 @@ function App() {
       return;
     }
 
-    if (!roomState?.ownerId || roomState.ownerId !== activeSocket.id) {
+    const canRestoreAsOwner = Boolean(
+      roomState?.ownerId === activeSocket.id ||
+        hostKeyRef.current
+    );
+    if (!canRestoreAsOwner) {
       return;
     }
 
