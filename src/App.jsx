@@ -161,7 +161,7 @@ function shouldStartStreamMuted() {
   }
 
   const userAgent = navigator.userAgent || "";
-  return /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent) || navigator.maxTouchPoints > 1;
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
 }
 
 function App() {
@@ -1321,6 +1321,15 @@ function App() {
     }
   }
 
+  function toggleBrowserRemoteMute() {
+    const nextValue = !browserRemoteMuted;
+    setBrowserRemoteMuted(nextValue);
+    if (browserRemoteVideoRef.current) {
+      browserRemoteVideoRef.current.muted = nextValue;
+      browserRemoteVideoRef.current.play().catch(() => {});
+    }
+  }
+
   function relayBrowserKey(event) {
     if (isOwner || !hasBrowserControl || !browserInteractionActive || !socketRef.current) {
       return;
@@ -2323,6 +2332,12 @@ function App() {
                 onChange={(event) => setBrowserVolume(Number(event.target.value))}
               />
             </label>
+
+            {!desktopHost && browserState.status?.startsWith("desktop-") ? (
+              <button className="secondary-btn" type="button" onClick={toggleBrowserRemoteMute}>
+                {browserRemoteMuted ? "Unmute Stream" : "Mute Stream"}
+              </button>
+            ) : null}
 
             {!isOwner ? (
               <label className="input-block stream-quality-block">
