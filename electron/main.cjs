@@ -270,7 +270,7 @@ app.whenReady().then(() => {
         callback({
           video: source,
           audio: hostFrame || (process.platform === "win32" ? "loopback" : undefined),
-          enableLocalEcho: Boolean(hostFrame)
+          enableLocalEcho: false
         });
       } catch (_error) {
         callback({});
