@@ -1976,6 +1976,11 @@ function App() {
     }
 
     let peer = browserPeersRef.current.get(senderId);
+    if (signal.type === "offer" && peer) {
+      removeBrowserPeer(senderId);
+      peer = null;
+    }
+
     if (!peer) {
       const connection = buildBrowserPeerConnection(senderId, activeSocket);
       peer = { connection, pendingCandidates: [] };
@@ -2032,6 +2037,21 @@ function App() {
 
     peer.connection.close();
     browserPeersRef.current.delete(participantId);
+
+    if (!browserStreamRef.current) {
+      browserRemoteStreamRef.current = null;
+      if (browserRemoteVideoRef.current) {
+        browserRemoteVideoRef.current.srcObject = null;
+      }
+      setBrowserRemoteReady(false);
+      setBrowserConnectionDebug((current) => ({
+        ...current,
+        role: "guest",
+        connectionState: "new",
+        iceConnectionState: "new",
+        iceGatheringState: "new"
+      }));
+    }
   }
 
   if (!roomId || !username || shouldHoldRoomEntry) {
