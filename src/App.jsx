@@ -448,10 +448,9 @@ function App() {
   useEffect(() => {
     if (browserPreviewRef.current && browserStreamRef.current) {
       browserPreviewRef.current.srcObject = browserStreamRef.current;
-      browserPreviewRef.current.volume = browserVolume / 100;
       browserPreviewRef.current.play().catch(() => {});
     }
-  }, [browserStreamReady, browserVolume]);
+  }, [browserStreamReady]);
 
   useEffect(() => {
     if (browserRemoteVideoRef.current && browserRemoteStreamRef.current) {
@@ -779,9 +778,6 @@ function App() {
   }, [roomId, shouldHoldRoomEntry]);
 
   useEffect(() => {
-    if (browserPreviewRef.current) {
-      browserPreviewRef.current.volume = browserVolume / 100;
-    }
     if (browserRemoteVideoRef.current) {
       browserRemoteVideoRef.current.muted = browserRemoteMuted;
       browserRemoteVideoRef.current.volume = browserVolume / 100;
@@ -1233,7 +1229,9 @@ function App() {
             max: STREAM_QUALITY_PRESETS.sharp.height
           }
         },
-        audio: true
+        audio: {
+          suppressLocalAudioPlayback: false
+        }
       });
 
       browserStreamRef.current = stream;
@@ -1372,7 +1370,9 @@ function App() {
 
     const displayStream = await navigator.mediaDevices.getDisplayMedia({
       video: true,
-      audio: true
+      audio: {
+        suppressLocalAudioPlayback: false
+      }
     });
 
     displayStream.getVideoTracks()[0].addEventListener("ended", async () => {
