@@ -553,6 +553,29 @@ select {
     rgba(0, 0, 0, 0.32);
 }
 
+.browser-audio-overlay {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  max-width: min(36rem, calc(100% - 2rem));
+}
+
+.browser-audio-overlay span {
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(4, 12, 24, 0.82);
+  border: 1px solid rgba(126, 154, 204, 0.28);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 600;
+  backdrop-filter: blur(10px);
+}
+
 .theater-exit-btn {
   position: absolute;
   top: 0.85rem;

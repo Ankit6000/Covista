@@ -2245,6 +2245,15 @@ function App() {
                 : undefined
             }
           >
+            {desktopHost ? (
+              <div className="browser-audio-overlay">
+                <span>Audio capture: {browserAudioDebug.hostCaptureOk ? "ok" : "idle"}</span>
+                <span>PID: {browserAudioDebug.hostCaptureProcessId || "none"}</span>
+                <span>Chunks: {browserAudioDebug.hostChunkCount}</span>
+                <span>Track: {browserAudioDebug.hostAudioTrackReady ? "ready" : "missing"}</span>
+              </div>
+            ) : null}
+
             {theaterMode ? (
               <button className="theater-exit-btn" type="button" onClick={toggleTheaterMode}>
                 Exit Theater
