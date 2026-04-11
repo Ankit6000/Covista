@@ -164,6 +164,14 @@ function shouldStartStreamMuted() {
   return /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
 }
 
+function readStoredHostKey(roomId) {
+  if (!roomId || typeof window === "undefined") {
+    return "";
+  }
+
+  return window.localStorage.getItem(`watchparty-host-key:${roomId}`) || "";
+}
+
 function App() {
   const desktopHost = window.desktopHost || null;
   const [username, setUsername] = useState("");
@@ -275,6 +283,23 @@ function App() {
   const peopleCountLabel = `${participants.length} joined`;
   const pendingRequestCount = controlRequests.length;
   const othersInCallCount = Math.max(participants.length - 1, 0);
+
+  function getActiveHostKey() {
+    return hostKeyRef.current || hostKey || readStoredHostKey(roomIdRef.current) || "";
+  }
+
+  function requestHostReclaim(activeSocket, targetRoomId = roomIdRef.current) {
+    const activeHostKey = getActiveHostKey();
+    if (!desktopHost || !activeSocket || !targetRoomId || !activeHostKey) {
+      return;
+    }
+
+    activeSocket.emit("reclaim-room-owner", {
+      roomId: targetRoomId,
+      username,
+      hostKey: activeHostKey
+    });
+  }
 
   async function tuneBrowserSender(sender, qualityKey = "sharp") {
     if (!sender) {
@@ -759,11 +784,16 @@ function App() {
     setSocket(nextSocket);
 
     nextSocket.on("connect", () => {
+      const activeHostKey = getActiveHostKey();
       nextSocket.emit("join-room", {
         roomId,
         username,
-        hostKey: hostKeyRef.current || undefined
+        hostKey: activeHostKey || undefined
       });
+      if (desktopHost && activeHostKey) {
+        setOwnerId(nextSocket.id);
+        setTimeout(() => requestHostReclaim(nextSocket, roomId), 150);
+      }
     });
 
     nextSocket.on("room-error", ({ message }) => {
@@ -771,7 +801,7 @@ function App() {
     });
 
     nextSocket.on("room-state", (state) => {
-      const effectiveOwnerId = desktopHost && hostKeyRef.current ? nextSocket.id : state.ownerId;
+      const effectiveOwnerId = desktopHost && getActiveHostKey() ? nextSocket.id : state.ownerId;
       if (state.ownerKey && roomIdRef.current) {
         window.localStorage.setItem(`watchparty-host-key:${roomIdRef.current}`, state.ownerKey);
         setHostKey(state.ownerKey);
@@ -789,11 +819,14 @@ function App() {
       setBrowserWarning(state.browserState.status?.startsWith("desktop-") ? "" : getEmbedWarning(state.browserState.url));
       setMessages(state.chat);
       setUnreadChatCount(0);
+      if (desktopHost && getActiveHostKey() && state.ownerId && state.ownerId !== nextSocket.id) {
+        requestHostReclaim(nextSocket, state.roomId || roomIdRef.current);
+      }
       void restoreActiveDesktopBrowserStream(nextSocket, state);
     });
 
     nextSocket.on("presence-update", (state) => {
-      const effectiveOwnerId = desktopHost && hostKeyRef.current ? nextSocket.id : state.ownerId;
+      const effectiveOwnerId = desktopHost && getActiveHostKey() ? nextSocket.id : state.ownerId;
       setParticipants(state.participants);
       setOwnerId(effectiveOwnerId);
       setControllerId(state.controllerId || null);
@@ -802,6 +835,9 @@ function App() {
         ...current,
         roomStateOwnerId: state.ownerId || null
       }));
+      if (desktopHost && getActiveHostKey() && state.ownerId && state.ownerId !== nextSocket.id) {
+        requestHostReclaim(nextSocket, roomIdRef.current);
+      }
     });
 
     nextSocket.on("participant-joined", async ({ participant }) => {
@@ -1345,7 +1381,7 @@ function App() {
 
     const canRestoreAsOwner = Boolean(
       roomState?.ownerId === activeSocket.id ||
-        hostKeyRef.current
+        getActiveHostKey()
     );
     if (!canRestoreAsOwner) {
       return;

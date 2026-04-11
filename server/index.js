@@ -120,6 +120,40 @@ function isSocketRoomOwner(socket, room) {
   return syncSocketRoomOwner(socket, room).isOwner;
 }
 
+function reclaimRoomOwner(socket, roomId, username, hostKey) {
+  const room = ensureRoom(roomId);
+  if (!room) {
+    return { ok: false, reason: "room-not-found" };
+  }
+
+  const cleanName = String(username || socket.data.username || "Guest").trim().slice(0, 32) || "Guest";
+  const normalizedHostKey = String(hostKey || socket.data.hostKey || "").trim() || null;
+
+  socket.data.roomId = roomId;
+  socket.data.username = cleanName;
+  socket.data.hostKey = normalizedHostKey;
+
+  const canReclaim =
+    Boolean(room.ownerKey && normalizedHostKey && room.ownerKey === normalizedHostKey) ||
+    Boolean(room.ownerName && room.ownerName === cleanName);
+
+  if (!canReclaim) {
+    return { ok: false, reason: "not-authorized" };
+  }
+
+  const participant = room.participants.get(socket.id);
+  if (participant) {
+    participant.username = cleanName;
+  }
+
+  const ownerSync = syncSocketRoomOwner(socket, room);
+  return {
+    ok: ownerSync.isOwner,
+    room,
+    changed: ownerSync.changed
+  };
+}
+
 function getStaticIceServers() {
   const urls = String(process.env.TURN_URLS || "")
     .split(",")
@@ -462,6 +496,29 @@ io.on("connection", (socket) => {
     });
 
     io.to(roomId).emit("presence-update", getPresenceState(room));
+  });
+
+  socket.on("reclaim-room-owner", ({ roomId, username, hostKey }, ack) => {
+    const result = reclaimRoomOwner(socket, roomId, username, hostKey);
+    if (!result.ok || !result.room) {
+      ack?.(result);
+      return;
+    }
+
+    socket.emit("room-state", {
+      roomId,
+      ownerId: result.room.ownerId,
+      ownerKey: result.room.ownerKey,
+      controllerId: result.room.controllerId,
+      controlRequests: result.room.controlRequests,
+      participants: getParticipants(result.room),
+      browserState: result.room.browserState,
+      chat: result.room.chat,
+      hostReclaimed: true
+    });
+
+    io.to(roomId).emit("presence-update", getPresenceState(result.room));
+    ack?.({ ok: true, changed: result.changed, ownerId: result.room.ownerId });
   });
 
   socket.on("chat-message", ({ roomId, text }) => {
