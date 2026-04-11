@@ -10,7 +10,7 @@ const backendBaseUrl = useHostedMode ? hostedWebAppUrl.replace(/\/+$/, "") : "ht
 
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
 app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
-app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
+app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion,WebRtcAllowInputVolumeAdjustment");
 
 let mainWindow = null;
 let hostWindow = null;

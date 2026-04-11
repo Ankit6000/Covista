@@ -56,6 +56,12 @@ const STREAM_QUALITY_PRESETS = {
   }
 };
 
+const MICROPHONE_CONSTRAINTS = {
+  echoCancellation: false,
+  noiseSuppression: false,
+  autoGainControl: false
+};
+
 function getRoomIdFromUrl() {
   const params = new URLSearchParams(window.location.search);
   return params.get("room") || "";
@@ -374,7 +380,7 @@ function App() {
 
     const requestedStream = await navigator.mediaDevices.getUserMedia({
       video: wantsVideo,
-      audio: wantsAudio
+      audio: wantsAudio ? MICROPHONE_CONSTRAINTS : false
     });
 
     if (!currentStream) {
@@ -1361,7 +1367,7 @@ function App() {
     if (sharingScreen) {
       const cameraStream = await navigator.mediaDevices.getUserMedia({
         video: true,
-        audio: micEnabled
+        audio: micEnabled ? MICROPHONE_CONSTRAINTS : false
       });
       swapOutgoingTracks(cameraStream);
       setSharingScreen(false);
@@ -1378,7 +1384,7 @@ function App() {
     displayStream.getVideoTracks()[0].addEventListener("ended", async () => {
       const cameraStream = await navigator.mediaDevices.getUserMedia({
         video: true,
-        audio: micEnabled
+        audio: micEnabled ? MICROPHONE_CONSTRAINTS : false
       });
       swapOutgoingTracks(cameraStream);
       setSharingScreen(false);
