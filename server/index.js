@@ -67,11 +67,57 @@ function getParticipants(room) {
   return Array.from(room.participants.values()).map(serializeParticipant);
 }
 
-function isSocketRoomOwner(socket, room) {
-  return Boolean(
-    (room.ownerId && room.ownerId === socket.id) ||
-      (room.ownerKey && socket.data.hostKey && room.ownerKey === socket.data.hostKey)
+function getPresenceState(room) {
+  return {
+    ownerId: room.ownerId,
+    controllerId: room.controllerId,
+    controlRequests: room.controlRequests,
+    participants: getParticipants(room).map((item) => ({
+      ...item,
+      isOwner: item.id === room.ownerId
+    }))
+  };
+}
+
+function syncSocketRoomOwner(socket, room) {
+  const matchesHostKey = Boolean(
+    room.ownerKey &&
+      socket.data.hostKey &&
+      room.ownerKey === socket.data.hostKey
   );
+  const matchesOwnerName = Boolean(
+    room.ownerName &&
+      socket.data.username &&
+      room.ownerName === socket.data.username
+  );
+
+  if (!matchesHostKey && !matchesOwnerName) {
+    return {
+      isOwner: Boolean(room.ownerId && room.ownerId === socket.id),
+      changed: false
+    };
+  }
+
+  const changed = room.ownerId !== socket.id;
+  room.ownerId = socket.id;
+
+  room.participants.forEach((participant, participantId) => {
+    participant.isOwner = participantId === socket.id;
+  });
+
+  const currentParticipant = room.participants.get(socket.id);
+  if (currentParticipant?.username) {
+    room.ownerName = currentParticipant.username;
+  }
+
+  return {
+    isOwner: true,
+    changed
+  };
+}
+
+function isSocketRoomOwner(socket, room) {
+  return syncSocketRoomOwner(socket, room).isOwner;
 }
 
 function getStaticIceServers() {
@@ -374,8 +420,12 @@ io.on("connection", (socket) => {
     }
 
     const cleanName = String(username || "Guest").trim().slice(0, 32) || "Guest";
+    const normalizedHostKey = String(hostKey || "").trim() || null;
+    socket.data.roomId = roomId;
+    socket.data.hostKey = normalizedHostKey;
+    socket.data.username = cleanName;
     const isHostJoin =
-      Boolean(room.ownerKey && hostKey && room.ownerKey === hostKey) ||
+      Boolean(room.ownerKey && normalizedHostKey && room.ownerKey === normalizedHostKey) ||
       Boolean(room.ownerName && room.ownerName === cleanName);
     const isFirstParticipant = room.participants.size === 0 && !room.ownerId;
     const shouldOwnRoom = isHostJoin || isFirstParticipant;
@@ -393,34 +443,25 @@ io.on("connection", (socket) => {
     }
 
     socket.join(roomId);
-    socket.data.roomId = roomId;
-    socket.data.hostKey = hostKey || null;
+    const ownerSync = syncSocketRoomOwner(socket, room);
 
     socket.emit("room-state", {
       roomId,
       ownerId: room.ownerId,
-      ownerKey: shouldOwnRoom ? room.ownerKey : null,
+      ownerKey: ownerSync.isOwner ? room.ownerKey : null,
       controllerId: room.controllerId,
       controlRequests: room.controlRequests,
       participants: getParticipants(room),
       browserState: room.browserState,
       chat: room.chat,
-      hostReclaimed: isHostJoin
+      hostReclaimed: isHostJoin || ownerSync.changed
     });
 
     socket.to(roomId).emit("participant-joined", {
       participant: serializeParticipant(participant)
     });
 
-    io.to(roomId).emit("presence-update", {
-      ownerId: room.ownerId,
-      controllerId: room.controllerId,
-      controlRequests: room.controlRequests,
-      participants: getParticipants(room).map((item) => ({
-        ...item,
-        isOwner: item.id === room.ownerId
-      }))
-    });
+    io.to(roomId).emit("presence-update", getPresenceState(room));
   });
 
   socket.on("chat-message", ({ roomId, text }) => {
@@ -449,9 +490,17 @@ io.on("connection", (socket) => {
 
   socket.on("browser-update", ({ roomId, url, query, status, aspectRatio }, ack) => {
     const room = ensureRoom(roomId);
-    if (!room || !isSocketRoomOwner(socket, room)) {
+    if (!room) {
       ack?.({ ok: false });
       return;
+    }
+    const ownerSync = syncSocketRoomOwner(socket, room);
+    if (!ownerSync.isOwner) {
+      ack?.({ ok: false });
+      return;
+    }
+    if (ownerSync.changed) {
+      io.to(roomId).emit("presence-update", getPresenceState(room));
     }
 
     room.browserState = {
@@ -474,7 +523,8 @@ io.on("connection", (socket) => {
       ack?.({ ok: false, reason: "room-not-found" });
       return;
     }
-    if (!isSocketRoomOwner(socket, room)) {
+    const ownerSync = syncSocketRoomOwner(socket, room);
+    if (!ownerSync.isOwner) {
       socket.emit("browser-frame-reject", {
         reason: "not-owner",
         roomId,
@@ -483,6 +533,9 @@ io.on("connection", (socket) => {
       });
       ack?.({ ok: false, reason: "not-owner" });
       return;
+    }
+    if (ownerSync.changed) {
+      io.to(roomId).emit("presence-update", getPresenceState(room));
     }
     if (!frame) {
       socket.emit("browser-frame-reject", { reason: "missing-frame", roomId });
@@ -511,7 +564,8 @@ io.on("connection", (socket) => {
       ack?.({ ok: false, reason: "debug-room-not-found" });
       return;
     }
-    if (!isSocketRoomOwner(socket, room)) {
+    const ownerSync = syncSocketRoomOwner(socket, room);
+    if (!ownerSync.isOwner) {
       socket.emit("browser-frame-reject", {
         reason: "debug-not-owner",
         roomId,
@@ -520,6 +574,9 @@ io.on("connection", (socket) => {
       });
       ack?.({ ok: false, reason: "debug-not-owner" });
       return;
+    }
+    if (ownerSync.changed) {
+      io.to(roomId).emit("presence-update", getPresenceState(room));
     }
 
     const payload = {
@@ -679,15 +736,7 @@ io.on("connection", (socket) => {
       participantName: leavingParticipant.username
     });
 
-    io.to(roomId).emit("presence-update", {
-      ownerId: room.ownerId,
-      controllerId: room.controllerId,
-      controlRequests: room.controlRequests,
-      participants: getParticipants(room).map((item) => ({
-        ...item,
-        isOwner: item.id === room.ownerId
-      }))
-    });
+    io.to(roomId).emit("presence-update", getPresenceState(room));
 
     if (room.participants.size === 0) {
       rooms.delete(roomId);
