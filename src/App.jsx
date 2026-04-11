@@ -189,6 +189,7 @@ function App() {
   const [browserRemoteReady, setBrowserRemoteReady] = useState(false);
   const [receiverQuality, setReceiverQuality] = useState("sharp");
   const [browserVolume, setBrowserVolume] = useState(100);
+  const [browserRemoteMuted, setBrowserRemoteMuted] = useState(true);
   const [theaterMode, setTheaterMode] = useState(false);
   const [sidebarTab, setSidebarTab] = useState("call");
   const [controlNotice, setControlNotice] = useState("");
@@ -455,10 +456,11 @@ function App() {
   useEffect(() => {
     if (browserRemoteVideoRef.current && browserRemoteStreamRef.current) {
       browserRemoteVideoRef.current.srcObject = browserRemoteStreamRef.current;
+      browserRemoteVideoRef.current.muted = browserRemoteMuted;
       browserRemoteVideoRef.current.volume = browserVolume / 100;
       browserRemoteVideoRef.current.play().catch(() => {});
     }
-  }, [browserRemoteReady, browserVolume]);
+  }, [browserRemoteReady, browserVolume, browserRemoteMuted]);
 
   useEffect(() => {
     if (sidebarTab === "chat") {
@@ -781,9 +783,10 @@ function App() {
       browserPreviewRef.current.volume = browserVolume / 100;
     }
     if (browserRemoteVideoRef.current) {
+      browserRemoteVideoRef.current.muted = browserRemoteMuted;
       browserRemoteVideoRef.current.volume = browserVolume / 100;
     }
-  }, [browserVolume]);
+  }, [browserVolume, browserRemoteMuted]);
 
   useEffect(() => {
     if (!hasBrowserControl || isOwner) {
@@ -1135,6 +1138,18 @@ function App() {
         ...extra
       }
     });
+  }
+
+  function handleBrowserStreamTap() {
+    if (!browserRemoteVideoRef.current) {
+      return;
+    }
+
+    if (browserRemoteMuted) {
+      setBrowserRemoteMuted(false);
+      browserRemoteVideoRef.current.muted = false;
+      browserRemoteVideoRef.current.play().catch(() => {});
+    }
   }
 
   function relayBrowserKey(event) {
@@ -1618,6 +1633,7 @@ function App() {
       const [stream] = event.streams;
       browserRemoteStreamRef.current = stream;
       setBrowserRemoteReady(true);
+      setBrowserRemoteMuted(true);
       setBrowserConnectionDebug({
         role: "guest",
         connectionState: connection.connectionState,
@@ -1632,6 +1648,7 @@ function App() {
 
       if (browserRemoteVideoRef.current) {
         browserRemoteVideoRef.current.srcObject = stream;
+        browserRemoteVideoRef.current.muted = true;
         browserRemoteVideoRef.current.play().catch(() => {});
       }
     };
@@ -2038,6 +2055,7 @@ function App() {
                 autoPlay
                 playsInline
                 onClick={(event) => {
+                  handleBrowserStreamTap();
                   if (hasBrowserControl && !isOwner) {
                     event.stopPropagation();
                     setBrowserInteractionActive(true);
@@ -2051,6 +2069,7 @@ function App() {
                     setBrowserInteractionActive(true);
                     browserRemoteVideoRef.current?.focus();
                   }
+                  handleBrowserStreamTap();
                   relayBrowserPointer("mouseDown", event, {
                     button: event.button === 2 ? "right" : "left"
                   });
