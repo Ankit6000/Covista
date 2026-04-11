@@ -266,9 +266,11 @@ app.whenReady().then(() => {
           return;
         }
 
+        const hostFrame = hostWindow.webContents.mainFrame || null;
         callback({
           video: source,
-          audio: process.platform === "win32" ? "loopback" : undefined
+          audio: hostFrame || (process.platform === "win32" ? "loopback" : undefined),
+          enableLocalEcho: Boolean(hostFrame)
         });
       } catch (_error) {
         callback({});

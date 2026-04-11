@@ -174,8 +174,8 @@ function App() {
   const [error, setError] = useState("");
   const [browserWarning, setBrowserWarning] = useState("");
   const [copied, setCopied] = useState(false);
-  const [cameraEnabled, setCameraEnabled] = useState(true);
-  const [micEnabled, setMicEnabled] = useState(true);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [micEnabled, setMicEnabled] = useState(false);
   const [sharingScreen, setSharingScreen] = useState(false);
   const [desktopBrowserState, setDesktopBrowserState] = useState({
     isOpen: false,
@@ -227,6 +227,8 @@ function App() {
   const socketRef = useRef(null);
   const roomIdRef = useRef(roomId);
   const hostKeyRef = useRef(hostKey);
+  const desktopBrowserStateRef = useRef(desktopBrowserState);
+  const browserStreamReadyRef = useRef(browserStreamReady);
   const requestedBrowserQualityRef = useRef(new Map());
   const browserInteractionRef = useRef(null);
 
@@ -289,6 +291,14 @@ function App() {
   }, [hostKey]);
 
   useEffect(() => {
+    desktopBrowserStateRef.current = desktopBrowserState;
+  }, [desktopBrowserState]);
+
+  useEffect(() => {
+    browserStreamReadyRef.current = browserStreamReady;
+  }, [browserStreamReady]);
+
+  useEffect(() => {
     if (!roomId) {
       setHostKey("");
       return;
@@ -297,6 +307,89 @@ function App() {
     const storedHostKey = window.localStorage.getItem(`watchparty-host-key:${roomId}`) || "";
     setHostKey(storedHostKey);
   }, [roomId]);
+
+  function syncStreamState(nextStream) {
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = nextStream || null;
+      if (nextStream) {
+        localVideoRef.current.play().catch(() => {});
+      }
+    }
+
+    setCameraEnabled(Boolean(nextStream?.getVideoTracks().some((track) => track.enabled)));
+    setMicEnabled(Boolean(nextStream?.getAudioTracks().some((track) => track.enabled)));
+  }
+
+  function syncLocalTracksToPeers(stream) {
+    peersRef.current.forEach(({ connection }, participantId) => {
+      const senders = connection.getSenders();
+      let addedTrack = false;
+
+      ["video", "audio"].forEach((kind) => {
+        const track = stream?.getTracks().find((item) => item.kind === kind) || null;
+        const sender = senders.find((item) => item.track?.kind === kind);
+
+        if (sender) {
+          sender.replaceTrack(track);
+          return;
+        }
+
+        if (track && stream) {
+          connection.addTrack(track, stream);
+          addedTrack = true;
+        }
+      });
+
+      if (addedTrack && socketRef.current && connection.signalingState === "stable") {
+        connection
+          .createOffer()
+          .then((offer) => connection.setLocalDescription(offer))
+          .then(() => {
+            socketRef.current?.emit("webrtc-signal", {
+              roomId: roomIdRef.current,
+              targetId: participantId,
+              signal: {
+                type: "offer",
+                sdp: connection.localDescription?.sdp
+              }
+            });
+          })
+          .catch(() => {});
+      }
+    });
+  }
+
+  async function ensureLocalMedia({ needVideo = false, needAudio = false } = {}) {
+    const currentStream = localStreamRef.current;
+    const hasVideo = Boolean(currentStream?.getVideoTracks().length);
+    const hasAudio = Boolean(currentStream?.getAudioTracks().length);
+    const wantsVideo = needVideo && !hasVideo;
+    const wantsAudio = needAudio && !hasAudio;
+
+    if (!wantsVideo && !wantsAudio) {
+      syncStreamState(currentStream);
+      return currentStream;
+    }
+
+    const requestedStream = await navigator.mediaDevices.getUserMedia({
+      video: wantsVideo,
+      audio: wantsAudio
+    });
+
+    if (!currentStream) {
+      localStreamRef.current = requestedStream;
+      syncLocalTracksToPeers(requestedStream);
+      syncStreamState(requestedStream);
+      return requestedStream;
+    }
+
+    requestedStream.getTracks().forEach((track) => {
+      currentStream.addTrack(track);
+    });
+    syncLocalTracksToPeers(currentStream);
+    syncStreamState(currentStream);
+    return currentStream;
+  }
 
   useEffect(() => {
     const existingName = window.localStorage.getItem("watchparty-name");
@@ -315,34 +408,7 @@ function App() {
   }, [roomId]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function setupLocalMedia() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true
-        });
-
-        if (cancelled) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-
-        localStreamRef.current = stream;
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-        }
-      } catch (mediaError) {
-        console.error(mediaError);
-        setError("Camera or microphone access was denied. Chat and synced browsing still work.");
-      }
-    }
-
-    setupLocalMedia();
-
     return () => {
-      cancelled = true;
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((track) => track.stop());
       }
@@ -350,10 +416,17 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (localVideoRef.current && localStreamRef.current) {
+    if (!localVideoRef.current) {
+      return;
+    }
+
+    if (localStreamRef.current) {
       localVideoRef.current.srcObject = localStreamRef.current;
       localVideoRef.current.play().catch(() => {});
+      return;
     }
+
+    localVideoRef.current.srcObject = null;
   }, [roomId, username]);
 
   useEffect(() => {
@@ -439,6 +512,18 @@ function App() {
 
     const unsubscribeLaunchRoom = desktopHost.onLaunchRoom(({ roomId: nextRoomId, username: nextUsername, hostKey: nextHostKey }) => {
       if (!nextRoomId) {
+        return;
+      }
+
+      const currentRoomId = roomIdRef.current;
+      const hasActiveDesktopSession =
+        Boolean(currentRoomId) &&
+        (desktopBrowserStateRef.current.isOpen || browserStreamReadyRef.current || socketRef.current?.connected);
+
+      if (currentRoomId && currentRoomId !== nextRoomId && hasActiveDesktopSession) {
+        setDesktopLaunchHint(
+          `Covista Desktop is already active in room ${currentRoomId}. Finish or close that session before opening ${nextRoomId}.`
+        );
         return;
       }
 
@@ -1260,14 +1345,10 @@ function App() {
   }
 
   async function toggleScreenShare() {
-    if (!localStreamRef.current) {
-      return;
-    }
-
     if (sharingScreen) {
       const cameraStream = await navigator.mediaDevices.getUserMedia({
         video: true,
-        audio: true
+        audio: micEnabled
       });
       swapOutgoingTracks(cameraStream);
       setSharingScreen(false);
@@ -1282,7 +1363,7 @@ function App() {
     displayStream.getVideoTracks()[0].addEventListener("ended", async () => {
       const cameraStream = await navigator.mediaDevices.getUserMedia({
         video: true,
-        audio: true
+        audio: micEnabled
       });
       swapOutgoingTracks(cameraStream);
       setSharingScreen(false);
@@ -1296,9 +1377,7 @@ function App() {
     const previousStream = localStreamRef.current;
     localStreamRef.current = nextStream;
 
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = nextStream;
-    }
+    syncStreamState(nextStream);
 
     const senders = [];
     peersRef.current.forEach(({ connection }) => {
@@ -1320,26 +1399,38 @@ function App() {
       });
     }
 
-    setCameraEnabled(nextStream.getVideoTracks().some((track) => track.enabled));
-    setMicEnabled(nextStream.getAudioTracks().some((track) => track.enabled));
+    syncStreamState(nextStream);
   }
 
-  function toggleTrack(kind) {
-    const stream = localStreamRef.current;
-    if (!stream) {
-      return;
+  async function toggleTrack(kind) {
+    const wantsVideo = kind === "video";
+    const wantsAudio = kind === "audio";
+    let stream = localStreamRef.current;
+    let tracks = wantsVideo ? stream?.getVideoTracks() || [] : stream?.getAudioTracks() || [];
+
+    if (!tracks.length) {
+      try {
+        stream = await ensureLocalMedia({
+          needVideo: wantsVideo,
+          needAudio: wantsAudio
+        });
+        tracks = wantsVideo ? stream?.getVideoTracks() || [] : stream?.getAudioTracks() || [];
+      } catch (mediaError) {
+        console.error(mediaError);
+        setError(
+          wantsVideo
+            ? "Camera access was denied. Chat and the shared browser still work."
+            : "Microphone access was denied. Chat and the shared browser still work."
+        );
+        return;
+      }
     }
 
-    const tracks = kind === "video" ? stream.getVideoTracks() : stream.getAudioTracks();
     tracks.forEach((track) => {
       track.enabled = !track.enabled;
     });
 
-    if (kind === "video") {
-      setCameraEnabled(tracks.some((track) => track.enabled));
-    } else {
-      setMicEnabled(tracks.some((track) => track.enabled));
-    }
+    syncStreamState(localStreamRef.current);
   }
 
   async function createOfferForParticipant(participantId, activeSocket = socketRef.current) {
