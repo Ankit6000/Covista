@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, desktopCapturer, session } = require("electron");
 const path = require("path");
+const { startAudioCapture, stopAudioCapture } = require("application-loopback");
 
 const isDev = !app.isPackaged;
 const rendererUrl = process.env.ELECTRON_RENDERER_URL || "http://127.0.0.1:5173";
@@ -16,6 +17,8 @@ let mainWindow = null;
 let hostWindow = null;
 let captureTimer = null;
 let pendingLaunchRoom = null;
+let activeHostAudioProcessId = null;
+let hostAudioCaptureRequested = false;
 
 function getDeepLinkUrlFromArgv(argv = []) {
   return argv.find((value) => typeof value === "string" && value.startsWith("covista://")) || null;
@@ -66,6 +69,66 @@ function registerProtocolHandler() {
 function sendToRenderer(channel, payload) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(channel, payload);
+  }
+}
+
+function stopHostAudioCapture() {
+  if (!activeHostAudioProcessId) {
+    return;
+  }
+
+  try {
+    stopAudioCapture(String(activeHostAudioProcessId));
+  } catch (_error) {
+    // Ignore shutdown races from the helper process.
+  }
+
+  activeHostAudioProcessId = null;
+}
+
+function syncHostAudioCapture() {
+  if (!hostAudioCaptureRequested || !hostWindow || hostWindow.isDestroyed()) {
+    stopHostAudioCapture();
+    return {
+      ok: false,
+      reason: "host-window-missing"
+    };
+  }
+
+  const processId = hostWindow.webContents.getOSProcessId();
+  if (!processId) {
+    return {
+      ok: false,
+      reason: "host-process-missing"
+    };
+  }
+
+  if (String(activeHostAudioProcessId) === String(processId)) {
+    return {
+      ok: true,
+      processId
+    };
+  }
+
+  stopHostAudioCapture();
+
+  try {
+    startAudioCapture(String(processId), {
+      onData: (chunk) => {
+        sendToRenderer("host-browser:audio-chunk", chunk);
+      }
+    });
+    activeHostAudioProcessId = processId;
+    return {
+      ok: true,
+      processId
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: "audio-capture-failed",
+      message: error?.message || "Unknown audio capture failure"
+    };
   }
 }
 
@@ -143,11 +206,22 @@ function attachHostWindowEvents() {
   hostWindow.on("closed", () => {
     hostWindow = null;
     stopCaptureLoop();
+    stopHostAudioCapture();
     emitHostState();
   });
 
-  hostWindow.webContents.on("did-navigate", emitHostState);
-  hostWindow.webContents.on("did-navigate-in-page", emitHostState);
+  hostWindow.webContents.on("did-finish-load", () => {
+    emitHostState();
+    syncHostAudioCapture();
+  });
+  hostWindow.webContents.on("did-navigate", () => {
+    emitHostState();
+    syncHostAudioCapture();
+  });
+  hostWindow.webContents.on("did-navigate-in-page", () => {
+    emitHostState();
+    syncHostAudioCapture();
+  });
   hostWindow.on("page-title-updated", (event) => {
     event.preventDefault();
     emitHostState();
@@ -266,10 +340,9 @@ app.whenReady().then(() => {
           return;
         }
 
-        const hostFrame = hostWindow.webContents.mainFrame || null;
         callback({
           video: source,
-          audio: hostFrame || (process.platform === "win32" ? "loopback" : undefined),
+          audio: false,
           enableLocalEcho: false
         });
       } catch (_error) {
@@ -430,6 +503,17 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle("host-browser:start-audio-capture", async () => {
+    hostAudioCaptureRequested = true;
+    return syncHostAudioCapture();
+  });
+
+  ipcMain.handle("host-browser:stop-audio-capture", async () => {
+    hostAudioCaptureRequested = false;
+    stopHostAudioCapture();
+    return { ok: true };
+  });
+
   ipcMain.handle("app:open-deep-link", async (_event, urlString) => {
     const launchRoom = parseLaunchRoom(urlString);
     if (!launchRoom) {
@@ -450,6 +534,7 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
   stopCaptureLoop();
+  stopHostAudioCapture();
   if (process.platform !== "darwin") {
     app.quit();
   }

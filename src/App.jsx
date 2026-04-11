@@ -229,6 +229,13 @@ function App() {
   const browserPreviewRef = useRef(null);
   const browserRemoteVideoRef = useRef(null);
   const browserRemoteStreamRef = useRef(null);
+  const browserVideoCaptureRef = useRef(null);
+  const browserAudioContextRef = useRef(null);
+  const browserAudioDestinationRef = useRef(null);
+  const browserAudioProcessorRef = useRef(null);
+  const browserAudioMonitorGainRef = useRef(null);
+  const browserAudioQueueRef = useRef([]);
+  const browserAudioQueueOffsetRef = useRef(0);
   const browserStageRef = useRef(null);
   const roomPageRef = useRef(null);
   const socketRef = useRef(null);
@@ -304,6 +311,116 @@ function App() {
   useEffect(() => {
     browserStreamReadyRef.current = browserStreamReady;
   }, [browserStreamReady]);
+
+  function enqueueHostBrowserAudioChunk(chunk) {
+    if (!browserAudioProcessorRef.current) {
+      return;
+    }
+
+    let bytes = null;
+    if (chunk instanceof Uint8Array) {
+      bytes = chunk;
+    } else if (chunk instanceof ArrayBuffer) {
+      bytes = new Uint8Array(chunk);
+    } else if (ArrayBuffer.isView(chunk)) {
+      bytes = new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+    } else if (chunk?.type === "Buffer" && Array.isArray(chunk.data)) {
+      bytes = Uint8Array.from(chunk.data);
+    }
+
+    if (!bytes || bytes.byteLength < 2) {
+      return;
+    }
+
+    const usableLength = bytes.byteLength - (bytes.byteLength % 2);
+    const copy = Uint8Array.from(bytes.slice(0, usableLength));
+    browserAudioQueueRef.current.push(new Int16Array(copy.buffer));
+
+    if (browserAudioQueueRef.current.length > 128) {
+      browserAudioQueueRef.current.splice(0, browserAudioQueueRef.current.length - 96);
+      browserAudioQueueOffsetRef.current = 0;
+    }
+  }
+
+  function destroyBrowserAudioPipeline() {
+    browserAudioProcessorRef.current?.disconnect();
+    browserAudioMonitorGainRef.current?.disconnect();
+    browserAudioProcessorRef.current = null;
+    browserAudioMonitorGainRef.current = null;
+    browserAudioDestinationRef.current = null;
+    browserAudioQueueRef.current = [];
+    browserAudioQueueOffsetRef.current = 0;
+
+    if (browserAudioContextRef.current) {
+      browserAudioContextRef.current.close().catch(() => {});
+      browserAudioContextRef.current = null;
+    }
+  }
+
+  async function ensureHostBrowserAudioTrack() {
+    if (!desktopHost) {
+      return null;
+    }
+
+    const existingTrack = browserAudioDestinationRef.current?.stream?.getAudioTracks?.()[0] || null;
+    if (existingTrack) {
+      return existingTrack;
+    }
+
+    const captureResult = await desktopHost.startHostBrowserAudioCapture();
+    if (!captureResult?.ok) {
+      return null;
+    }
+
+    const audioContext = new window.AudioContext({ sampleRate: 48000 });
+    const destination = audioContext.createMediaStreamDestination();
+    const processor = audioContext.createScriptProcessor(4096, 0, 2);
+    const monitorGain = audioContext.createGain();
+    monitorGain.gain.value = 0;
+
+    browserAudioQueueRef.current = [];
+    browserAudioQueueOffsetRef.current = 0;
+
+    processor.onaudioprocess = (event) => {
+      const left = event.outputBuffer.getChannelData(0);
+      const right = event.outputBuffer.getChannelData(1);
+      left.fill(0);
+      right.fill(0);
+
+      let frameIndex = 0;
+      while (frameIndex < left.length && browserAudioQueueRef.current.length > 0) {
+        const samples = browserAudioQueueRef.current[0];
+        let sampleIndex = browserAudioQueueOffsetRef.current;
+
+        while (frameIndex < left.length && sampleIndex + 1 < samples.length) {
+          left[frameIndex] = samples[sampleIndex] / 32768;
+          right[frameIndex] = samples[sampleIndex + 1] / 32768;
+          frameIndex += 1;
+          sampleIndex += 2;
+        }
+
+        if (sampleIndex >= samples.length - 1) {
+          browserAudioQueueRef.current.shift();
+          browserAudioQueueOffsetRef.current = 0;
+        } else {
+          browserAudioQueueOffsetRef.current = sampleIndex;
+          break;
+        }
+      }
+    };
+
+    processor.connect(destination);
+    processor.connect(monitorGain);
+    monitorGain.connect(audioContext.destination);
+    await audioContext.resume().catch(() => {});
+
+    browserAudioContextRef.current = audioContext;
+    browserAudioDestinationRef.current = destination;
+    browserAudioProcessorRef.current = processor;
+    browserAudioMonitorGainRef.current = monitorGain;
+
+    return destination.stream.getAudioTracks()[0] || null;
+  }
 
   useEffect(() => {
     if (!roomId) {
@@ -517,6 +634,10 @@ function App() {
       }));
     });
 
+    const unsubscribeAudioChunk = desktopHost.onHostBrowserAudioChunk((payload) => {
+      enqueueHostBrowserAudioChunk(payload);
+    });
+
     const unsubscribeLaunchRoom = desktopHost.onLaunchRoom(({ roomId: nextRoomId, username: nextUsername, hostKey: nextHostKey }) => {
       if (!nextRoomId) {
         return;
@@ -575,9 +696,10 @@ function App() {
 
     return () => {
       unsubscribeState?.();
+      unsubscribeAudioChunk?.();
       unsubscribeLaunchRoom?.();
     };
-  }, [desktopHost]);
+  }, [desktopHost, draftName, browserState.url, browserInput]);
 
   useEffect(() => {
     if (!roomId || !username || !rtcConfigReady || shouldHoldRoomEntry) {
@@ -1220,7 +1342,7 @@ function App() {
     }
 
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
+      const videoStream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           frameRate: {
             ideal: STREAM_QUALITY_PRESETS.sharp.fps,
@@ -1235,10 +1357,15 @@ function App() {
             max: STREAM_QUALITY_PRESETS.sharp.height
           }
         },
-        audio: {
-          suppressLocalAudioPlayback: false
-        }
+        audio: false
       });
+
+      browserVideoCaptureRef.current = videoStream;
+      const audioTrack = await ensureHostBrowserAudioTrack();
+      const stream = new MediaStream([
+        ...videoStream.getVideoTracks(),
+        ...(audioTrack ? [audioTrack] : [])
+      ]);
 
       browserStreamRef.current = stream;
       setBrowserStreamReady(true);
@@ -1310,6 +1437,16 @@ function App() {
       browserStreamRef.current.getTracks().forEach((track) => track.stop());
       browserStreamRef.current = null;
     }
+
+    if (browserVideoCaptureRef.current) {
+      browserVideoCaptureRef.current.getTracks().forEach((track) => track.stop());
+      browserVideoCaptureRef.current = null;
+    }
+
+    if (desktopHost) {
+      desktopHost.stopHostBrowserAudioCapture().catch(() => {});
+    }
+    destroyBrowserAudioPipeline();
 
     if (browserPreviewRef.current) {
       browserPreviewRef.current.srcObject = null;
