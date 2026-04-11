@@ -155,6 +155,15 @@ function getDesktopLaunchUrl(roomId, name = "", explicitHostKey = "") {
   return `covista://host?${params.toString()}`;
 }
 
+function shouldStartStreamMuted() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  const userAgent = navigator.userAgent || "";
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent) || navigator.maxTouchPoints > 1;
+}
+
 function App() {
   const desktopHost = window.desktopHost || null;
   const [username, setUsername] = useState("");
@@ -195,7 +204,7 @@ function App() {
   const [browserRemoteReady, setBrowserRemoteReady] = useState(false);
   const [receiverQuality, setReceiverQuality] = useState("sharp");
   const [browserVolume, setBrowserVolume] = useState(100);
-  const [browserRemoteMuted, setBrowserRemoteMuted] = useState(true);
+  const [browserRemoteMuted, setBrowserRemoteMuted] = useState(() => shouldStartStreamMuted());
   const [theaterMode, setTheaterMode] = useState(false);
   const [sidebarTab, setSidebarTab] = useState("call");
   const [controlNotice, setControlNotice] = useState("");
@@ -1775,8 +1784,9 @@ function App() {
     connection.ontrack = (event) => {
       const [stream] = event.streams;
       browserRemoteStreamRef.current = stream;
+      const nextMutedState = shouldStartStreamMuted();
       setBrowserRemoteReady(true);
-      setBrowserRemoteMuted(true);
+      setBrowserRemoteMuted(nextMutedState);
       setBrowserConnectionDebug({
         role: "guest",
         connectionState: connection.connectionState,
@@ -1791,7 +1801,7 @@ function App() {
 
       if (browserRemoteVideoRef.current) {
         browserRemoteVideoRef.current.srcObject = stream;
-        browserRemoteVideoRef.current.muted = true;
+        browserRemoteVideoRef.current.muted = nextMutedState;
         browserRemoteVideoRef.current.play().catch(() => {});
       }
     };
