@@ -10,8 +10,6 @@ const hostedWebAppUrl =
   process.env.HOSTED_WEB_APP_URL ||
   (app.isPackaged ? packagedHostedWebAppUrl : "");
 const useHostedMode = Boolean(hostedWebAppUrl);
-const backendBaseUrl = useHostedMode ? hostedWebAppUrl.replace(/\/+$/, "") : "http://127.0.0.1:3001";
-
 if (app.isPackaged) {
   setExecutablesRoot(path.join(process.resourcesPath, "application-loopback-bin"));
 }
@@ -24,6 +22,7 @@ let mainWindow = null;
 let hostWindow = null;
 let captureTimer = null;
 let pendingLaunchRoom = null;
+let activePublicOriginOverride = "";
 let activeHostAudioProcessId = null;
 let hostAudioCaptureRequested = false;
 
@@ -49,6 +48,7 @@ function parseLaunchRoom(urlString) {
     const roomId = (url.searchParams.get("room") || "").trim().toUpperCase();
     const username = String(url.searchParams.get("name") || "").trim().slice(0, 32);
     const hostKey = String(url.searchParams.get("hostKey") || "").trim();
+    const origin = String(url.searchParams.get("origin") || "").trim();
     if (!roomId) {
       return null;
     }
@@ -57,10 +57,56 @@ function parseLaunchRoom(urlString) {
       roomId,
       username,
       hostKey,
+      origin,
       source: urlString
     };
   } catch (_error) {
     return null;
+  }
+}
+
+function normalizeOrigin(input) {
+  const raw = String(input || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  try {
+    const url = new URL(raw);
+    return url.origin;
+  } catch (_error) {
+    return "";
+  }
+}
+
+function getActivePublicAppUrl() {
+  const launchOrigin = normalizeOrigin(activePublicOriginOverride || pendingLaunchRoom?.origin);
+  if (launchOrigin) {
+    return launchOrigin;
+  }
+
+  if (hostedWebAppUrl) {
+    return hostedWebAppUrl.replace(/\/+$/, "");
+  }
+
+  return rendererUrl.replace(/\/+$/, "");
+}
+
+function getActiveBackendBaseUrl() {
+  const publicUrl = getActivePublicAppUrl();
+  if (!publicUrl) {
+    return "http://127.0.0.1:3001";
+  }
+
+  try {
+    const url = new URL(publicUrl);
+    const isLocalRenderer = ["127.0.0.1", "localhost"].includes(url.hostname) && url.port === "5173";
+    if (isLocalRenderer) {
+      return `${url.protocol}//${url.hostname}:3001`;
+    }
+    return publicUrl;
+  } catch (_error) {
+    return "http://127.0.0.1:3001";
   }
 }
 
@@ -70,6 +116,24 @@ function dispatchPendingLaunchRoom() {
   }
 
   mainWindow.webContents.send("app:launch-room", getPendingLaunchRoomSnapshot());
+}
+
+function shouldReloadMainWindowForActiveOrigin() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return false;
+  }
+
+  const targetUrl = getActivePublicAppUrl();
+  const currentUrl = String(mainWindow.webContents.getURL() || "").trim();
+  if (!targetUrl || !currentUrl) {
+    return false;
+  }
+
+  try {
+    return new URL(targetUrl).origin !== new URL(currentUrl).origin;
+  } catch (_error) {
+    return false;
+  }
 }
 
 function registerProtocolHandler() {
@@ -378,8 +442,10 @@ function createMainWindow() {
     }
   });
 
-  if (useHostedMode) {
-    mainWindow.loadURL(hostedWebAppUrl);
+  const initialMainWindowUrl = getActivePublicAppUrl();
+
+  if (initialMainWindowUrl) {
+    mainWindow.loadURL(initialMainWindowUrl);
   } else if (isDev) {
     mainWindow.loadURL(rendererUrl);
   } else {
@@ -400,9 +466,13 @@ if (!gotSingleInstanceLock) {
     const launchRoom = parseLaunchRoom(getDeepLinkUrlFromArgv(argv));
     if (launchRoom) {
       pendingLaunchRoom = launchRoom;
+      activePublicOriginOverride = launchRoom.origin || activePublicOriginOverride;
     }
 
     if (mainWindow && !mainWindow.isDestroyed()) {
+      if (launchRoom && shouldReloadMainWindowForActiveOrigin()) {
+        mainWindow.loadURL(getActivePublicAppUrl());
+      }
       if (mainWindow.isMinimized()) {
         mainWindow.restore();
       }
@@ -418,6 +488,7 @@ app.whenReady().then(() => {
   const initialLaunchRoom = parseLaunchRoom(getDeepLinkUrlFromArgv(process.argv));
   if (initialLaunchRoom) {
     pendingLaunchRoom = initialLaunchRoom;
+    activePublicOriginOverride = initialLaunchRoom.origin || activePublicOriginOverride;
   }
 
   app.on("open-url", (event, urlString) => {
@@ -425,6 +496,10 @@ app.whenReady().then(() => {
     const launchRoom = parseLaunchRoom(urlString);
     if (launchRoom) {
       pendingLaunchRoom = launchRoom;
+      activePublicOriginOverride = launchRoom.origin || activePublicOriginOverride;
+      if (shouldReloadMainWindowForActiveOrigin()) {
+        mainWindow.loadURL(getActivePublicAppUrl());
+      }
       dispatchPendingLaunchRoom();
     }
   });
@@ -590,7 +665,7 @@ app.whenReady().then(() => {
     }
 
     try {
-      const response = await fetch(`${backendBaseUrl}/api/rooms/${roomId}/frame`, {
+      const response = await fetch(`${getActiveBackendBaseUrl()}/api/rooms/${roomId}/frame`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -631,12 +706,23 @@ app.whenReady().then(() => {
     }
 
     pendingLaunchRoom = launchRoom;
+    activePublicOriginOverride = launchRoom.origin || activePublicOriginOverride;
+    if (shouldReloadMainWindowForActiveOrigin()) {
+      await mainWindow.loadURL(getActivePublicAppUrl());
+    }
     dispatchPendingLaunchRoom();
     return { ok: true };
   });
 
   ipcMain.handle("app:get-pending-launch-room", async () => {
     return getPendingLaunchRoomSnapshot();
+  });
+
+  ipcMain.handle("app:get-runtime-config", async () => {
+    return {
+      publicAppUrl: getActivePublicAppUrl(),
+      backendBaseUrl: getActiveBackendBaseUrl()
+    };
   });
 
   ipcMain.handle("app:clear-pending-launch-room", async (_event, roomId) => {

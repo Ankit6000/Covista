@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld("desktopHost", {
   uploadRoomFrame: (payload) => ipcRenderer.invoke("host-browser:upload-frame", payload),
   openDeepLink: (url) => ipcRenderer.invoke("app:open-deep-link", url),
   getPendingLaunchRoom: () => ipcRenderer.invoke("app:get-pending-launch-room"),
+  getRuntimeConfig: () => ipcRenderer.invoke("app:get-runtime-config"),
   clearPendingLaunchRoom: (roomId) => ipcRenderer.invoke("app:clear-pending-launch-room", roomId),
   onHostBrowserState: (callback) => {
     const listener = (_event, payload) => callback(payload);

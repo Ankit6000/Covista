@@ -12,7 +12,6 @@ function getApiBase() {
   return window.location.origin;
 }
 
-const API_BASE = getApiBase();
 const DESKTOP_APP_DOWNLOAD_URL = "https://github.com/Ankit6000/Covista/releases";
 const DEFAULT_RTC_CONFIG = {
   iceServers: [
@@ -152,6 +151,9 @@ function getDesktopLaunchUrl(roomId, name = "", explicitHostKey = "") {
   if (hostKey) {
     params.set("hostKey", hostKey);
   }
+  if (typeof window !== "undefined" && window.location?.origin) {
+    params.set("origin", window.location.origin);
+  }
   return `covista://host?${params.toString()}`;
 }
 
@@ -261,6 +263,10 @@ function App() {
     guestAudioTrackCount: 0
   });
   const [additionalInfoOpen, setAdditionalInfoOpen] = useState(false);
+  const [runtimeConfig, setRuntimeConfig] = useState({
+    publicAppUrl: typeof window !== "undefined" ? window.location.origin : "",
+    backendBaseUrl: getApiBase()
+  });
 
   const localVideoRef = useRef(null);
   const remoteVideoRefs = useRef(new Map());
@@ -295,7 +301,9 @@ function App() {
   const hasStoredHostClaim = Boolean(hostKey);
   const isOwner = Boolean((selfId && ownerId === selfId) || (desktopHost && hasStoredHostClaim));
   const hasBrowserControl = Boolean(selfId && (selfId === ownerId || selfId === controllerId));
-  const invitationLink = activeRoomId ? `${window.location.origin}?room=${activeRoomId}` : "";
+  const publicAppUrl = runtimeConfig.publicAppUrl || window.location.origin;
+  const apiBase = runtimeConfig.backendBaseUrl || getApiBase();
+  const invitationLink = activeRoomId ? `${publicAppUrl}?room=${activeRoomId}` : "";
   const controllerParticipant = controllerId ? participants.find((participant) => participant.id === controllerId) : null;
   const controllerDisplayName = controllerParticipant ? controllerParticipant.username : null;
   const peopleCountLabel = `${participants.length} joined`;
@@ -305,6 +313,31 @@ function App() {
   function getActiveHostKey() {
     return hostKeyRef.current || hostKey || readStoredHostKey(roomIdRef.current) || "";
   }
+
+  useEffect(() => {
+    if (!desktopHost?.getRuntimeConfig) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    desktopHost
+      .getRuntimeConfig()
+      .then((config) => {
+        if (cancelled || !config) {
+          return;
+        }
+
+        setRuntimeConfig((current) => ({
+          publicAppUrl: config.publicAppUrl || current.publicAppUrl,
+          backendBaseUrl: config.backendBaseUrl || current.backendBaseUrl
+        }));
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [desktopHost]);
 
   function requestHostReclaim(activeSocket, targetRoomId = roomIdRef.current) {
     const activeHostKey = getActiveHostKey();
@@ -683,8 +716,11 @@ function App() {
     let cancelled = false;
 
     async function loadRuntimeConfig() {
+      if (!cancelled) {
+        setRtcConfigReady(false);
+      }
       try {
-        const response = await fetch(`${API_BASE}/api/config`);
+        const response = await fetch(`${apiBase}/api/config`);
         if (!response.ok) {
           if (!cancelled) {
             setRtcConfigReady(true);
@@ -709,7 +745,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [apiBase]);
 
   useEffect(() => {
     if (!desktopHost) {
@@ -808,7 +844,7 @@ function App() {
       return undefined;
     }
 
-    const nextSocket = io(API_BASE, {
+    const nextSocket = io(apiBase, {
       transports: ["websocket"]
     });
 
@@ -980,7 +1016,7 @@ function App() {
       browserPeersRef.current.forEach((_, participantId) => removeBrowserPeer(participantId));
       setSocket(null);
     };
-  }, [roomId, username, rtcConfigReady, shouldHoldRoomEntry]);
+  }, [roomId, username, rtcConfigReady, shouldHoldRoomEntry, apiBase, desktopHost]);
 
   useEffect(() => {
     if (!socketRef.current || !roomId || isOwner) {
@@ -1002,7 +1038,7 @@ function App() {
 
     async function loadControlState() {
       try {
-        const response = await fetch(`${API_BASE}/api/rooms/${roomId}/control`);
+        const response = await fetch(`${apiBase}/api/rooms/${roomId}/control`);
         if (!response.ok) {
           return;
         }
@@ -1066,7 +1102,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/api/rooms`, {
+      const response = await fetch(`${apiBase}/api/rooms`, {
         method: "POST"
       });
       const data = await response.json();
