@@ -293,6 +293,7 @@ function App() {
   const participantsRef = useRef(participants);
   const desktopBrowserStateRef = useRef(desktopBrowserState);
   const browserStreamReadyRef = useRef(browserStreamReady);
+  const browserRemoteReadyRef = useRef(browserRemoteReady);
   const requestedBrowserQualityRef = useRef(new Map());
   const browserStreamRefreshRequestAtRef = useRef(0);
   const browserInteractionRef = useRef(null);
@@ -401,8 +402,26 @@ function App() {
   }, [participants]);
 
   useEffect(() => {
+    browserRemoteReadyRef.current = browserRemoteReady;
+  }, [browserRemoteReady]);
+
+  useEffect(() => {
     hostKeyRef.current = hostKey;
   }, [hostKey]);
+
+  function requestBrowserStreamRefresh(activeSocket = socketRef.current, force = false) {
+    if (!activeSocket || !roomIdRef.current) {
+      return;
+    }
+
+    const now = Date.now();
+    if (!force && now - browserStreamRefreshRequestAtRef.current < 750) {
+      return;
+    }
+
+    browserStreamRefreshRequestAtRef.current = now;
+    activeSocket.emit("browser-stream-refresh-request", { roomId: roomIdRef.current });
+  }
 
   useEffect(() => {
     desktopBrowserStateRef.current = desktopBrowserState;
@@ -897,6 +916,9 @@ function App() {
       if (desktopHost && getActiveHostKey() && state.ownerId && state.ownerId !== nextSocket.id) {
         requestHostReclaim(nextSocket, state.roomId || roomIdRef.current);
       }
+      if (!desktopHost && state.browserState?.status?.startsWith("desktop-") && !browserRemoteReadyRef.current) {
+        requestBrowserStreamRefresh(nextSocket, true);
+      }
       void restoreActiveDesktopBrowserStream(nextSocket, state);
     });
 
@@ -912,6 +934,9 @@ function App() {
       }));
       if (desktopHost && getActiveHostKey() && state.ownerId && state.ownerId !== nextSocket.id) {
         requestHostReclaim(nextSocket, roomIdRef.current);
+      }
+      if (!desktopHost && state.browserState?.status?.startsWith("desktop-") && !browserRemoteReadyRef.current) {
+        requestBrowserStreamRefresh(nextSocket);
       }
       void restoreActiveDesktopBrowserStream(nextSocket, state);
     });
@@ -953,6 +978,9 @@ function App() {
       setBrowserWarning(nextState.status?.startsWith("desktop-") ? "" : getEmbedWarning(nextState.url));
       if (!(ownerId === nextSocket.id)) {
         setBrowserInput(nextState.query || nextState.url || "");
+      }
+      if (!desktopHost && nextState.status?.startsWith("desktop-") && !browserRemoteReadyRef.current) {
+        requestBrowserStreamRefresh(nextSocket);
       }
     });
 
@@ -1091,18 +1119,8 @@ function App() {
       return undefined;
     }
 
-    function requestBrowserStreamRefresh() {
-      const now = Date.now();
-      if (now - browserStreamRefreshRequestAtRef.current < 2000) {
-        return;
-      }
-
-      browserStreamRefreshRequestAtRef.current = now;
-      socketRef.current?.emit("browser-stream-refresh-request", { roomId });
-    }
-
     requestBrowserStreamRefresh();
-    const intervalId = window.setInterval(requestBrowserStreamRefresh, 2000);
+    const intervalId = window.setInterval(() => requestBrowserStreamRefresh(), 1000);
 
     return () => {
       window.clearInterval(intervalId);
