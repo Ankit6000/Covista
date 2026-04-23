@@ -290,6 +290,7 @@ function App() {
   const roomIdRef = useRef(roomId);
   const hostKeyRef = useRef(hostKey);
   const clientKeyRef = useRef(getClientKey());
+  const participantsRef = useRef(participants);
   const desktopBrowserStateRef = useRef(desktopBrowserState);
   const browserStreamReadyRef = useRef(browserStreamReady);
   const requestedBrowserQualityRef = useRef(new Map());
@@ -393,6 +394,10 @@ function App() {
   useEffect(() => {
     roomIdRef.current = roomId;
   }, [roomId]);
+
+  useEffect(() => {
+    participantsRef.current = participants;
+  }, [participants]);
 
   useEffect(() => {
     hostKeyRef.current = hostKey;
@@ -907,6 +912,7 @@ function App() {
       if (desktopHost && getActiveHostKey() && state.ownerId && state.ownerId !== nextSocket.id) {
         requestHostReclaim(nextSocket, roomIdRef.current);
       }
+      void restoreActiveDesktopBrowserStream(nextSocket, state);
     });
 
     nextSocket.on("participant-joined", async ({ participant }) => {
@@ -1944,6 +1950,21 @@ function App() {
     });
   }
 
+  function scheduleBrowserPeerReconnect(participantId, activeSocket) {
+    window.setTimeout(async () => {
+      if (!activeSocket || !browserStreamRef.current || activeSocket.disconnected) {
+        return;
+      }
+
+      const participantStillPresent = participantsRef.current.some((participant) => participant.id === participantId);
+      if (!participantStillPresent || browserPeersRef.current.has(participantId)) {
+        return;
+      }
+
+      await createBrowserOfferForParticipant(participantId, activeSocket);
+    }, 500);
+  }
+
   function buildBrowserPeerConnection(participantId, activeSocket) {
     const connection = new RTCPeerConnection(rtcConfig);
 
@@ -2017,8 +2038,11 @@ function App() {
         iceGatheringState: connection.iceGatheringState
       }));
 
-      if (["failed", "closed"].includes(connection.connectionState)) {
+      if (["disconnected", "failed", "closed"].includes(connection.connectionState)) {
         removeBrowserPeer(participantId);
+        if (browserStreamRef.current && connection.connectionState !== "closed") {
+          scheduleBrowserPeerReconnect(participantId, activeSocket);
+        }
       }
     };
 
@@ -2030,6 +2054,13 @@ function App() {
         iceConnectionState: connection.iceConnectionState,
         iceGatheringState: connection.iceGatheringState
       }));
+
+      if (["disconnected", "failed", "closed"].includes(connection.iceConnectionState)) {
+        removeBrowserPeer(participantId);
+        if (browserStreamRef.current && connection.iceConnectionState !== "closed") {
+          scheduleBrowserPeerReconnect(participantId, activeSocket);
+        }
+      }
     };
 
     connection.onicegatheringstatechange = () => {
