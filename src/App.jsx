@@ -968,7 +968,6 @@ function App() {
       if (desktopHost && getActiveHostKey() && state.ownerId && state.ownerId !== nextSocket.id) {
         requestHostReclaim(nextSocket, roomIdRef.current);
       }
-      void restoreActiveDesktopBrowserStream(nextSocket, state);
     });
 
     nextSocket.on("participant-joined", async ({ participant }) => {
