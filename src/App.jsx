@@ -297,6 +297,7 @@ function App() {
   const browserConnectionDebugRef = useRef(browserConnectionDebug);
   const requestedBrowserQualityRef = useRef(new Map());
   const browserStreamRefreshRequestAtRef = useRef(0);
+  const guestBrowserRefreshTimeoutRef = useRef(null);
   const browserInteractionRef = useRef(null);
 
   const selfId = socket?.id || null;
@@ -436,6 +437,21 @@ function App() {
 
     browserStreamRefreshRequestAtRef.current = now;
     activeSocket.emit("browser-stream-refresh-request", { roomId: roomIdRef.current });
+  }
+
+  function scheduleGuestBrowserRefresh(activeSocket = socketRef.current, delay = 1200, force = false) {
+    if (guestBrowserRefreshTimeoutRef.current) {
+      window.clearTimeout(guestBrowserRefreshTimeoutRef.current);
+    }
+
+    guestBrowserRefreshTimeoutRef.current = window.setTimeout(() => {
+      guestBrowserRefreshTimeoutRef.current = null;
+      if (browserRemoteReadyRef.current) {
+        return;
+      }
+
+      requestBrowserStreamRefresh(activeSocket, force);
+    }, delay);
   }
 
   useEffect(() => {
@@ -902,6 +918,8 @@ function App() {
       if (desktopHost && activeHostKey) {
         setOwnerId(nextSocket.id);
         setTimeout(() => requestHostReclaim(nextSocket, roomId), 150);
+      } else if (browserState.status?.startsWith("desktop-") && !browserRemoteReadyRef.current) {
+        scheduleGuestBrowserRefresh(nextSocket, 1200, true);
       }
     });
 
@@ -932,7 +950,7 @@ function App() {
         requestHostReclaim(nextSocket, state.roomId || roomIdRef.current);
       }
       if (!desktopHost && state.browserState?.status?.startsWith("desktop-") && !browserRemoteReadyRef.current) {
-        requestBrowserStreamRefresh(nextSocket, true);
+        scheduleGuestBrowserRefresh(nextSocket, 1200, true);
       }
       void restoreActiveDesktopBrowserStream(nextSocket, state);
     });
@@ -951,7 +969,7 @@ function App() {
         requestHostReclaim(nextSocket, roomIdRef.current);
       }
       if (!desktopHost && state.browserState?.status?.startsWith("desktop-") && !browserRemoteReadyRef.current) {
-        requestBrowserStreamRefresh(nextSocket);
+        scheduleGuestBrowserRefresh(nextSocket, 1200);
       }
       void restoreActiveDesktopBrowserStream(nextSocket, state);
     });
@@ -995,7 +1013,7 @@ function App() {
         setBrowserInput(nextState.query || nextState.url || "");
       }
       if (!desktopHost && nextState.status?.startsWith("desktop-") && !browserRemoteReadyRef.current) {
-        requestBrowserStreamRefresh(nextSocket);
+        scheduleGuestBrowserRefresh(nextSocket, 1200);
       }
     });
 
@@ -1070,6 +1088,10 @@ function App() {
     });
 
     return () => {
+      if (guestBrowserRefreshTimeoutRef.current) {
+        window.clearTimeout(guestBrowserRefreshTimeoutRef.current);
+        guestBrowserRefreshTimeoutRef.current = null;
+      }
       nextSocket.disconnect();
       peersRef.current.forEach((_, participantId) => removePeer(participantId));
       browserPeersRef.current.forEach((_, participantId) => removeBrowserPeer(participantId));
@@ -1121,26 +1143,6 @@ function App() {
       window.clearInterval(intervalId);
     };
   }, [roomId, shouldHoldRoomEntry]);
-
-  useEffect(() => {
-    if (
-      !socketRef.current ||
-      !roomId ||
-      desktopHost ||
-      isOwner ||
-      !browserState.status?.startsWith("desktop-") ||
-      browserRemoteReady
-    ) {
-      return undefined;
-    }
-
-    requestBrowserStreamRefresh();
-    const intervalId = window.setInterval(() => requestBrowserStreamRefresh(), 1000);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [roomId, desktopHost, isOwner, browserState.status, browserRemoteReady]);
 
   useEffect(() => {
     if (browserRemoteVideoRef.current) {
@@ -2094,6 +2096,10 @@ function App() {
         status: "desktop-webrtc",
         updatedAt: Date.now()
       }));
+      if (guestBrowserRefreshTimeoutRef.current) {
+        window.clearTimeout(guestBrowserRefreshTimeoutRef.current);
+        guestBrowserRefreshTimeoutRef.current = null;
+      }
 
       if (browserRemoteVideoRef.current) {
         browserRemoteVideoRef.current.srcObject = stream;
@@ -2115,6 +2121,8 @@ function App() {
         removeBrowserPeer(participantId);
         if (browserStreamRef.current && connection.connectionState !== "closed") {
           scheduleBrowserPeerReconnect(participantId, activeSocket);
+        } else if (!browserStreamRef.current && connection.connectionState !== "closed") {
+          scheduleGuestBrowserRefresh(activeSocket, 1500, true);
         }
       }
     };
@@ -2132,6 +2140,8 @@ function App() {
         removeBrowserPeer(participantId);
         if (browserStreamRef.current && connection.iceConnectionState !== "closed") {
           scheduleBrowserPeerReconnect(participantId, activeSocket);
+        } else if (!browserStreamRef.current && connection.iceConnectionState !== "closed") {
+          scheduleGuestBrowserRefresh(activeSocket, 1500, true);
         }
       }
     };
