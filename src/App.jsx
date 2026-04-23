@@ -260,6 +260,7 @@ function App() {
     hostAudioTrackReady: false,
     guestAudioTrackCount: 0
   });
+  const [additionalInfoOpen, setAdditionalInfoOpen] = useState(false);
 
   const localVideoRef = useRef(null);
   const remoteVideoRefs = useRef(new Map());
@@ -2094,67 +2095,52 @@ function App() {
 
   if (!roomId || !username || shouldHoldRoomEntry) {
     return (
-      <div className="page-shell">
-        <div className="ambient ambient-left" />
-        <div className="ambient ambient-right" />
-        <section className="hero-card">
-          <span className="eyebrow">Realtime movie rooms</span>
-          <h1>RoomFlix lets your group browse, chat, and jump on video in one watch-party room.</h1>
-          <p className="hero-copy">
-            Create a room, invite friends, then control the shared browser as host. When a streaming site blocks embeds,
-            switch to screen share inside the same room.
-          </p>
-
-          <div className="form-grid">
-            <label className="input-block">
-              <span>Your name</span>
-              <input
-                value={draftName}
-                onChange={(event) => setDraftName(event.target.value)}
-                placeholder="Ankit"
-              />
-            </label>
-
-            <div className="cta-row">
-              <button className="primary-btn" onClick={createRoom}>
-                Create Room
-              </button>
-            </div>
-
-            <label className="input-block">
-              <span>Join with room code</span>
-              <input
-                value={joinRoomInput}
-                onChange={(event) => setJoinRoomInput(event.target.value)}
-                placeholder="ABC123"
-              />
-            </label>
-
-            <div className="cta-row">
-              <button className="secondary-btn" onClick={joinRoom}>
-                Join Room
-              </button>
-            </div>
+      <div className="home-v2-shell">
+        <section className="home-v2">
+          <div className="home-v2-hero">
+            <span className="home-v2-kicker">Covista Watchparty</span>
+            <h1>One room for every stream.</h1>
+            <p>
+              Create a room, host the shared browser from desktop, and let friends join from the web.
+            </p>
           </div>
 
-          {error ? <p className="error-text">{error}</p> : null}
-          <p className="hero-copy hero-note">
-            Guests stay on the website. Hosts use the desktop app for the real shared browser.
-          </p>
+          <div className="home-v2-panel">
+            <div className="home-v2-panel-head">
+              <span>Start watching</span>
+              <strong>Host uses desktop. Guests stay here.</strong>
+            </div>
 
-          <div className="feature-strip">
-            <div>
-              <strong>Shared browsing</strong>
-              <span>Host controls synced navigation for everyone.</span>
+            <div className="home-v2-form">
+              <label>
+                <span>Your name</span>
+                <input
+                  value={draftName}
+                  onChange={(event) => setDraftName(event.target.value)}
+                  placeholder="Enter your name"
+                />
+              </label>
+              <button className="home-v2-primary" onClick={createRoom}>
+                Create room
+              </button>
+              <div className="home-v2-divider">
+                <span>or join existing room</span>
+              </div>
+              <label>
+                <span>Room code</span>
+                <input
+                  value={joinRoomInput}
+                  onChange={(event) => setJoinRoomInput(event.target.value.toUpperCase())}
+                  placeholder="ABC123"
+                />
+              </label>
+              <button className="home-v2-secondary" onClick={joinRoom}>
+                Join room
+              </button>
             </div>
-            <div>
-              <strong>Live chat</strong>
-              <span>Quick reactions without leaving the room.</span>
-            </div>
-            <div>
-              <strong>Video panel</strong>
-              <span>WebRTC camera, mic, and screen share controls.</span>
-            </div>
+
+            {error ? <p className="home-v2-error">{error}</p> : null}
+            <p className="home-v2-note">Shared browser, chat, call, and control requests stay inside one room.</p>
           </div>
 
           {hostPromptOpen && !desktopHost ? (
@@ -2190,7 +2176,6 @@ function App() {
           <span className="eyebrow">Room {roomId}</span>
           <h2>Watch together without tab-hopping.</h2>
         </div>
-
         <div className="topbar-actions">
           <div className="invite-box">
             <span>{invitationLink}</span>
@@ -2198,11 +2183,6 @@ function App() {
           <button className="secondary-btn" onClick={copyInviteLink}>
             {copied ? "Copied" : "Copy Invite"}
           </button>
-          {!desktopHost && isOwner ? (
-            <button className="primary-btn" type="button" onClick={openDesktopHostApp}>
-              Host With Desktop App
-            </button>
-          ) : null}
         </div>
       </header>
 
@@ -2277,54 +2257,6 @@ function App() {
 
           {controlNotice ? <div className="control-request-empty">{controlNotice}</div> : null}
 
-          {isOwner ? (
-            <div className="control-request-panel">
-              <div className="control-request-head">
-                <strong>Browser Control</strong>
-                <span>
-                  {controllerId
-                    ? `${participants.find((participant) => participant.id === controllerId)?.username || "Someone"} is controlling`
-                    : pendingRequestCount > 0
-                      ? `${pendingRequestCount} pending`
-                      : "Host only"}
-                </span>
-              </div>
-
-              {controlRequests.length > 0 ? (
-                <div className="control-request-list">
-                  {controlRequests.map((requesterId) => {
-                    const requester = participants.find((participant) => participant.id === requesterId);
-                    if (!requester) {
-                      return null;
-                    }
-
-                    return (
-                      <div className="control-request-item" key={requesterId}>
-                        <span>{requester.username} requested control</span>
-                        <div className="control-request-actions">
-                          <button className="mini-btn" type="button" onClick={() => approveBrowserControl(requesterId)}>
-                            Approve
-                          </button>
-                          <button className="mini-btn cancel" type="button" onClick={() => denyBrowserControl(requesterId)}>
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="control-request-empty">No pending control requests.</div>
-              )}
-
-              {controllerId ? (
-                <button className="secondary-btn" type="button" onClick={releaseBrowserControl}>
-                  Take Back Control
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-
           {desktopHost && isOwner ? (
             <div className="desktop-actions">
               <button className="secondary-btn" onClick={openDesktopBrowser}>
@@ -2339,39 +2271,6 @@ function App() {
             </div>
           ) : null}
 
-          <div className="browser-meta">
-            <span>Current page: {browserState.url || desktopBrowserState.url || "Waiting for host"}</span>
-            <span>Last update: {browserState.updatedAt ? formatTime(browserState.updatedAt) : "--:--"}</span>
-          </div>
-
-          {desktopHost ? (
-            <div className="desktop-debug">
-              <span>{browserStreamReady ? "Desktop browser live stream active" : "Desktop browser live stream idle"}</span>
-              <span>Socket: {socketRef.current?.connected ? "connected" : "not connected"}</span>
-              <span>Role: {isOwner ? "host" : "watcher"}</span>
-              <span>Browser peer: {browserConnectionDebug.connectionState}</span>
-              <span>ICE: {browserConnectionDebug.iceConnectionState}</span>
-              <span>Host audio capture: {browserAudioDebug.hostCaptureOk ? "ok" : "idle"}</span>
-              <span>Host audio PID: {browserAudioDebug.hostCaptureProcessId || "none"}</span>
-              <span>Audio chunks: {browserAudioDebug.hostChunkCount}</span>
-              <span>Last audio chunk: {browserAudioDebug.lastHostChunkAt ? formatTime(browserAudioDebug.lastHostChunkAt) : "--:--"}</span>
-              <span>Audio track: {browserAudioDebug.hostAudioTrackReady ? "ready" : "missing"}</span>
-              <span>Host key: {hostKey ? "present" : "missing"}</span>
-              <span>Self: {selfId || "none"}</span>
-              <span>Owner: {ownerId || "none"}</span>
-              <span>Room reclaim: {hostDebug.roomStateHostReclaimed ? "yes" : "no"}</span>
-            </div>
-          ) : null}
-
-          {!desktopHost && browserState.status?.startsWith("desktop-") ? (
-            <div className="desktop-debug">
-              <span>Browser peer: {browserConnectionDebug.connectionState}</span>
-              <span>ICE: {browserConnectionDebug.iceConnectionState}</span>
-              <span>Gathering: {browserConnectionDebug.iceGatheringState}</span>
-              <span>Audio tracks: {browserAudioDebug.guestAudioTrackCount}</span>
-            </div>
-          ) : null}
-
           <div
             ref={browserStageRef}
             className={`browser-frame-wrap ${browserState.status?.startsWith("desktop-") ? "desktop-mode" : ""}`}
@@ -2381,7 +2280,7 @@ function App() {
                 : undefined
             }
           >
-            {desktopHost ? (
+            {desktopHost && additionalInfoOpen ? (
               <div className="browser-audio-overlay">
                 <span>Audio capture: {browserAudioDebug.hostCaptureOk ? "ok" : "idle"}</span>
                 <span>PID: {browserAudioDebug.hostCaptureProcessId || "none"}</span>
@@ -2463,7 +2362,6 @@ function App() {
                 <p>The host hasn&apos;t loaded a page yet.</p>
               </div>
             )}
-
           </div>
 
           <div className="player-controls">
@@ -2504,6 +2402,49 @@ function App() {
             <button className="secondary-btn" onClick={toggleBrowserFullscreen}>
               Full Screen
             </button>
+          </div>
+
+          <div className="additional-info-panel">
+            <button className="secondary-btn additional-info-toggle" type="button" onClick={() => setAdditionalInfoOpen((open) => !open)}>
+              {additionalInfoOpen ? "Hide additional information" : "Additional information"}
+            </button>
+
+            {additionalInfoOpen ? (
+              <>
+                <div className="browser-meta">
+                  <span>Current page: {browserState.url || desktopBrowserState.url || "Waiting for host"}</span>
+                  <span>Last update: {browserState.updatedAt ? formatTime(browserState.updatedAt) : "--:--"}</span>
+                </div>
+
+                {desktopHost ? (
+                  <div className="desktop-debug">
+                    <span>{browserStreamReady ? "Desktop browser live stream active" : "Desktop browser live stream idle"}</span>
+                    <span>Socket: {socketRef.current?.connected ? "connected" : "not connected"}</span>
+                    <span>Role: {isOwner ? "host" : "watcher"}</span>
+                    <span>Browser peer: {browserConnectionDebug.connectionState}</span>
+                    <span>ICE: {browserConnectionDebug.iceConnectionState}</span>
+                    <span>Host audio capture: {browserAudioDebug.hostCaptureOk ? "ok" : "idle"}</span>
+                    <span>Host audio PID: {browserAudioDebug.hostCaptureProcessId || "none"}</span>
+                    <span>Audio chunks: {browserAudioDebug.hostChunkCount}</span>
+                    <span>Last audio chunk: {browserAudioDebug.lastHostChunkAt ? formatTime(browserAudioDebug.lastHostChunkAt) : "--:--"}</span>
+                    <span>Audio track: {browserAudioDebug.hostAudioTrackReady ? "ready" : "missing"}</span>
+                    <span>Host key: {hostKey ? "present" : "missing"}</span>
+                    <span>Self: {selfId || "none"}</span>
+                    <span>Owner: {ownerId || "none"}</span>
+                    <span>Room reclaim: {hostDebug.roomStateHostReclaimed ? "yes" : "no"}</span>
+                  </div>
+                ) : null}
+
+                {!desktopHost && browserState.status?.startsWith("desktop-") ? (
+                  <div className="desktop-debug">
+                    <span>Browser peer: {browserConnectionDebug.connectionState}</span>
+                    <span>ICE: {browserConnectionDebug.iceConnectionState}</span>
+                    <span>Gathering: {browserConnectionDebug.iceGatheringState}</span>
+                    <span>Audio tracks: {browserAudioDebug.guestAudioTrackCount}</span>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
           </div>
 
           {!browserState.status?.startsWith("desktop-") && browserWarning ? (
@@ -2549,6 +2490,54 @@ function App() {
 
                 {controllerDisplayName ? <div className="controller-banner">Current control: {controllerDisplayName}</div> : null}
 
+                {isOwner ? (
+                  <div className="control-request-panel people-control-panel">
+                    <div className="control-request-head">
+                      <strong>Browser Control</strong>
+                      <span>
+                        {controllerId
+                          ? `${participants.find((participant) => participant.id === controllerId)?.username || "Someone"} is controlling`
+                          : pendingRequestCount > 0
+                            ? `${pendingRequestCount} pending`
+                            : "Host only"}
+                      </span>
+                    </div>
+
+                    {controlRequests.length > 0 ? (
+                      <div className="control-request-list">
+                        {controlRequests.map((requesterId) => {
+                          const requester = participants.find((participant) => participant.id === requesterId);
+                          if (!requester) {
+                            return null;
+                          }
+
+                          return (
+                            <div className="control-request-item" key={requesterId}>
+                              <span>{requester.username} requested control</span>
+                              <div className="control-request-actions">
+                                <button className="mini-btn" type="button" onClick={() => approveBrowserControl(requesterId)}>
+                                  Approve
+                                </button>
+                                <button className="mini-btn cancel" type="button" onClick={() => denyBrowserControl(requesterId)}>
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="control-request-empty">No pending control requests.</div>
+                    )}
+
+                    {controllerId ? (
+                      <button className="secondary-btn" type="button" onClick={releaseBrowserControl}>
+                        Take Back Control
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <div className="participant-list">
                   {participants.map((participant) => (
                     <div className="participant-card" key={participant.id}>
@@ -2563,11 +2552,6 @@ function App() {
                         </span>
                       </div>
                       <div className="participant-actions">
-                        {isOwner && controlRequests.includes(participant.id) ? (
-                          <button className="mini-btn" onClick={() => approveBrowserControl(participant.id)}>
-                            Approve
-                          </button>
-                        ) : null}
                         <span className={`status-dot ${participant.id === selfId ? "self" : ""}`} />
                       </div>
                     </div>
