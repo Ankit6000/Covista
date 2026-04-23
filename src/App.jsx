@@ -715,20 +715,9 @@ function App() {
       return undefined;
     }
 
-    const unsubscribeState = desktopHost.onHostBrowserState((payload) => {
-      setDesktopBrowserState((current) => ({
-        ...current,
-        ...payload
-      }));
-    });
-
-    const unsubscribeAudioChunk = desktopHost.onHostBrowserAudioChunk((payload) => {
-      enqueueHostBrowserAudioChunk(payload);
-    });
-
-    const unsubscribeLaunchRoom = desktopHost.onLaunchRoom(({ roomId: nextRoomId, username: nextUsername, hostKey: nextHostKey }) => {
+    function applyLaunchRoomPayload({ roomId: nextRoomId, username: nextUsername, hostKey: nextHostKey } = {}) {
       if (!nextRoomId) {
-        return;
+        return false;
       }
 
       const currentRoomId = roomIdRef.current;
@@ -740,7 +729,7 @@ function App() {
         setDesktopLaunchHint(
           `Covista Desktop is already active in room ${currentRoomId}. Finish or close that session before opening ${nextRoomId}.`
         );
-        return;
+        return false;
       }
 
       const effectiveName = String(nextUsername || draftName || window.localStorage.getItem("watchparty-name") || "").trim();
@@ -780,7 +769,31 @@ function App() {
       setError("");
       setDesktopLaunchHint("");
       setHostPromptOpen(false);
+      desktopHost.clearPendingLaunchRoom?.(nextRoomId).catch(() => {});
+      return true;
+    }
+
+    const unsubscribeState = desktopHost.onHostBrowserState((payload) => {
+      setDesktopBrowserState((current) => ({
+        ...current,
+        ...payload
+      }));
     });
+
+    const unsubscribeAudioChunk = desktopHost.onHostBrowserAudioChunk((payload) => {
+      enqueueHostBrowserAudioChunk(payload);
+    });
+
+    const unsubscribeLaunchRoom = desktopHost.onLaunchRoom((payload) => {
+      applyLaunchRoomPayload(payload);
+    });
+
+    desktopHost
+      .getPendingLaunchRoom?.()
+      .then((payload) => {
+        applyLaunchRoomPayload(payload);
+      })
+      .catch(() => {});
 
     return () => {
       unsubscribeState?.();

@@ -24,6 +24,14 @@ let pendingLaunchRoom = null;
 let activeHostAudioProcessId = null;
 let hostAudioCaptureRequested = false;
 
+function getPendingLaunchRoomSnapshot() {
+  if (!pendingLaunchRoom) {
+    return null;
+  }
+
+  return { ...pendingLaunchRoom };
+}
+
 function getDeepLinkUrlFromArgv(argv = []) {
   return argv.find((value) => typeof value === "string" && value.startsWith("covista://")) || null;
 }
@@ -58,7 +66,7 @@ function dispatchPendingLaunchRoom() {
     return;
   }
 
-  mainWindow.webContents.send("app:launch-room", pendingLaunchRoom);
+  mainWindow.webContents.send("app:launch-room", getPendingLaunchRoomSnapshot());
 }
 
 function registerProtocolHandler() {
@@ -622,6 +630,23 @@ app.whenReady().then(() => {
     pendingLaunchRoom = launchRoom;
     dispatchPendingLaunchRoom();
     return { ok: true };
+  });
+
+  ipcMain.handle("app:get-pending-launch-room", async () => {
+    return getPendingLaunchRoomSnapshot();
+  });
+
+  ipcMain.handle("app:clear-pending-launch-room", async (_event, roomId) => {
+    if (!pendingLaunchRoom) {
+      return { ok: true, cleared: false };
+    }
+
+    if (roomId && pendingLaunchRoom.roomId && String(roomId).toUpperCase() !== String(pendingLaunchRoom.roomId).toUpperCase()) {
+      return { ok: true, cleared: false };
+    }
+
+    pendingLaunchRoom = null;
+    return { ok: true, cleared: true };
   });
 
   app.on("activate", () => {
