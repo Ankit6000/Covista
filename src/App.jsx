@@ -968,9 +968,6 @@ function App() {
       if (desktopHost && getActiveHostKey() && state.ownerId && state.ownerId !== nextSocket.id) {
         requestHostReclaim(nextSocket, roomIdRef.current);
       }
-      if (!desktopHost && state.browserState?.status?.startsWith("desktop-") && !browserRemoteReadyRef.current) {
-        scheduleGuestBrowserRefresh(nextSocket, 1200);
-      }
       void restoreActiveDesktopBrowserStream(nextSocket, state);
     });
 
@@ -1011,9 +1008,6 @@ function App() {
       setBrowserWarning(nextState.status?.startsWith("desktop-") ? "" : getEmbedWarning(nextState.url));
       if (!(ownerId === nextSocket.id)) {
         setBrowserInput(nextState.query || nextState.url || "");
-      }
-      if (!desktopHost && nextState.status?.startsWith("desktop-") && !browserRemoteReadyRef.current) {
-        scheduleGuestBrowserRefresh(nextSocket, 1200);
       }
     });
 
