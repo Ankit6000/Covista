@@ -23,6 +23,7 @@ let hostWindow = null;
 let captureTimer = null;
 let pendingLaunchRoom = null;
 let activePublicOriginOverride = "";
+let mainWindowLoadFailed = false;
 let activeHostAudioProcessId = null;
 let hostAudioCaptureRequested = false;
 
@@ -125,14 +126,54 @@ function shouldReloadMainWindowForActiveOrigin() {
 
   const targetUrl = getActivePublicAppUrl();
   const currentUrl = String(mainWindow.webContents.getURL() || "").trim();
-  if (!targetUrl || !currentUrl) {
+  if (!targetUrl) {
     return false;
+  }
+
+  if (mainWindowLoadFailed || !currentUrl || currentUrl.startsWith("data:")) {
+    return true;
   }
 
   try {
     return new URL(targetUrl).origin !== new URL(currentUrl).origin;
   } catch (_error) {
-    return false;
+    return true;
+  }
+}
+
+function getMainAppErrorPage(message, details = "") {
+  return getHostErrorPage(
+    "Desktop app could not load",
+    message,
+    details
+  );
+}
+
+async function loadMainWindowApp() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  const targetUrl = getActivePublicAppUrl();
+  if (!targetUrl) {
+    await mainWindow.loadURL(
+      getMainAppErrorPage("No app URL is configured for the desktop shell.")
+    );
+    mainWindowLoadFailed = true;
+    return;
+  }
+
+  try {
+    await mainWindow.loadURL(targetUrl);
+    mainWindowLoadFailed = false;
+  } catch (error) {
+    mainWindowLoadFailed = true;
+    await mainWindow.loadURL(
+      getMainAppErrorPage(
+        "Covista could not open the app UI inside Electron.",
+        `${targetUrl}\n${error?.message || "Unknown renderer load failure"}`
+      )
+    );
   }
 }
 
@@ -442,18 +483,43 @@ function createMainWindow() {
     }
   });
 
-  const initialMainWindowUrl = getActivePublicAppUrl();
-
-  if (initialMainWindowUrl) {
-    mainWindow.loadURL(initialMainWindowUrl);
-  } else if (isDev) {
-    mainWindow.loadURL(rendererUrl);
-  } else {
-    mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
-  }
+  loadMainWindowApp();
 
   mainWindow.webContents.on("did-finish-load", () => {
+    mainWindowLoadFailed = false;
     dispatchPendingLaunchRoom();
+  });
+
+  mainWindow.webContents.on("did-fail-load", async (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    if (!isMainFrame || !mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+
+    if (errorCode === -3) {
+      return;
+    }
+
+    mainWindowLoadFailed = true;
+    await mainWindow.loadURL(
+      getMainAppErrorPage(
+        "Covista could not load the desktop app screen.",
+        `${validatedURL || getActivePublicAppUrl() || "Unknown URL"}\n${errorCode}: ${errorDescription || "Unknown navigation failure"}`
+      )
+    );
+  });
+
+  mainWindow.webContents.on("render-process-gone", async (_event, details) => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+
+    mainWindowLoadFailed = true;
+    await mainWindow.loadURL(
+      getMainAppErrorPage(
+        "The desktop app renderer crashed.",
+        `${details?.reason || "unknown"}`
+      )
+    );
   });
 }
 
@@ -471,7 +537,7 @@ if (!gotSingleInstanceLock) {
 
     if (mainWindow && !mainWindow.isDestroyed()) {
       if (launchRoom && shouldReloadMainWindowForActiveOrigin()) {
-        mainWindow.loadURL(getActivePublicAppUrl());
+        loadMainWindowApp();
       }
       if (mainWindow.isMinimized()) {
         mainWindow.restore();
@@ -498,7 +564,7 @@ app.whenReady().then(() => {
       pendingLaunchRoom = launchRoom;
       activePublicOriginOverride = launchRoom.origin || activePublicOriginOverride;
       if (shouldReloadMainWindowForActiveOrigin()) {
-        mainWindow.loadURL(getActivePublicAppUrl());
+        loadMainWindowApp();
       }
       dispatchPendingLaunchRoom();
     }
@@ -708,7 +774,7 @@ app.whenReady().then(() => {
     pendingLaunchRoom = launchRoom;
     activePublicOriginOverride = launchRoom.origin || activePublicOriginOverride;
     if (shouldReloadMainWindowForActiveOrigin()) {
-      await mainWindow.loadURL(getActivePublicAppUrl());
+      await loadMainWindowApp();
     }
     dispatchPendingLaunchRoom();
     return { ok: true };
