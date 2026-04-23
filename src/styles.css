@@ -1051,3 +1051,249 @@ input::placeholder {
     min-height: 500px;
   }
 }
+
+@media (max-width: 900px) {
+  .room-page {
+    padding: 0.75rem;
+    gap: 0.75rem;
+  }
+
+  .room-topbar,
+  .desktop-handoff-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.9rem;
+    padding: 1rem;
+  }
+
+  .topbar-actions,
+  .desktop-handoff-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: stretch;
+  }
+
+  .topbar-actions > *,
+  .desktop-handoff-actions > * {
+    flex: 1 1 180px;
+  }
+
+  .invite-box {
+    max-width: none;
+    width: 100%;
+  }
+
+  .panel-head,
+  .browser-form,
+  .desktop-actions,
+  .player-controls,
+  .additional-info-panel,
+  .tab-panel {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .panel-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .panel-status-row {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .browser-form {
+    flex-direction: column;
+  }
+
+  .browser-form .primary-btn,
+  .browser-form .secondary-btn {
+    width: 100%;
+  }
+
+  .desktop-actions {
+    flex-wrap: wrap;
+  }
+
+  .desktop-actions > * {
+    flex: 1 1 180px;
+  }
+
+  .player-controls {
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .player-controls > * {
+    flex: 1 1 180px;
+  }
+
+  .stream-quality-block {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .stream-quality-block select {
+    width: 100%;
+  }
+
+  .browser-meta {
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .chat-form {
+    flex-direction: column;
+  }
+
+  .chat-form button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .home-v2-shell {
+    min-height: auto;
+    padding: 1rem;
+    align-items: stretch;
+  }
+
+  .home-v2 {
+    border-radius: 14px;
+  }
+
+  .home-v2-hero,
+  .home-v2-panel {
+    padding: 1.25rem;
+  }
+
+  .home-v2-hero h1 {
+    font-size: 2.2rem;
+    line-height: 1.02;
+    margin-bottom: 1rem;
+  }
+
+  .home-v2-hero p {
+    font-size: 0.98rem;
+  }
+
+  .host-choice-overlay {
+    padding: 1rem;
+  }
+
+  .host-choice-modal {
+    width: 100%;
+    padding: 1.25rem;
+  }
+
+  .host-choice-modal h3 {
+    font-size: 1.15rem;
+    line-height: 1.2;
+  }
+
+  .host-choice-actions {
+    flex-direction: column;
+  }
+
+  .room-page {
+    padding: 0.5rem;
+    gap: 0.5rem;
+  }
+
+  .room-topbar {
+    padding: 0.9rem;
+  }
+
+  .room-topbar h2 {
+    font-size: 1rem;
+    line-height: 1.25;
+  }
+
+  .topbar-actions {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .topbar-actions > * {
+    width: 100%;
+    flex: none;
+  }
+
+  .panel-head,
+  .browser-form,
+  .desktop-actions,
+  .player-controls,
+  .additional-info-panel,
+  .tab-panel {
+    padding-left: 0.9rem;
+    padding-right: 0.9rem;
+  }
+
+  .browser-frame-wrap {
+    min-height: 42vh;
+  }
+
+  .player-controls > * {
+    flex: 1 1 100%;
+  }
+
+  .player-volume {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .player-volume input[type="range"] {
+    width: 140px;
+    flex: 0 0 auto;
+  }
+
+  .sidebar-tabs {
+    gap: 0.35rem;
+    padding: 0.35rem;
+  }
+
+  .sidebar-tab {
+    padding: 0.65rem 0.3rem;
+    font-size: 0.82rem;
+    gap: 0.3rem;
+  }
+
+  .tab-badge {
+    font-size: 0.65rem;
+  }
+
+  .control-row {
+    grid-template-columns: 1fr;
+  }
+
+  .video-grid {
+    gap: 0.5rem;
+  }
+
+  .desktop-debug {
+    gap: 0.35rem;
+  }
+
+  .desktop-debug span {
+    font-size: 0.7rem;
+    word-break: break-word;
+  }
+}
+
+@media (max-width: 1024px) {
+  .room-page.theater-mode {
+    padding: 0;
+  }
+
+  .room-page.theater-mode .room-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .room-page.theater-mode .browser-panel {
+    border-right: none;
+    border-bottom: 1px solid var(--border-light);
+  }
+}
