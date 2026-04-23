@@ -294,6 +294,7 @@ function App() {
   const desktopBrowserStateRef = useRef(desktopBrowserState);
   const browserStreamReadyRef = useRef(browserStreamReady);
   const browserRemoteReadyRef = useRef(browserRemoteReady);
+  const browserConnectionDebugRef = useRef(browserConnectionDebug);
   const requestedBrowserQualityRef = useRef(new Map());
   const browserStreamRefreshRequestAtRef = useRef(0);
   const browserInteractionRef = useRef(null);
@@ -406,6 +407,10 @@ function App() {
   }, [browserRemoteReady]);
 
   useEffect(() => {
+    browserConnectionDebugRef.current = browserConnectionDebug;
+  }, [browserConnectionDebug]);
+
+  useEffect(() => {
     hostKeyRef.current = hostKey;
   }, [hostKey]);
 
@@ -414,8 +419,18 @@ function App() {
       return;
     }
 
+    const connectionState = browserConnectionDebugRef.current.connectionState;
+    const iceConnectionState = browserConnectionDebugRef.current.iceConnectionState;
+    const streamIsActivelyConnecting =
+      connectionState === "connecting" ||
+      ["checking", "connected", "completed"].includes(iceConnectionState);
+
+    if (!force && streamIsActivelyConnecting) {
+      return;
+    }
+
     const now = Date.now();
-    if (!force && now - browserStreamRefreshRequestAtRef.current < 750) {
+    if (!force && now - browserStreamRefreshRequestAtRef.current < 2500) {
       return;
     }
 
