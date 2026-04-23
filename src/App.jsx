@@ -158,12 +158,7 @@ function getDesktopLaunchUrl(roomId, name = "", explicitHostKey = "") {
 }
 
 function shouldStartStreamMuted() {
-  if (typeof navigator === "undefined") {
-    return false;
-  }
-
-  const userAgent = navigator.userAgent || "";
-  return /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
+  return true;
 }
 
 function readStoredHostKey(roomId) {
