@@ -1088,17 +1088,26 @@ function App() {
       !browserState.status?.startsWith("desktop-") ||
       browserRemoteReady
     ) {
-      return;
+      return undefined;
     }
 
-    const now = Date.now();
-    if (now - browserStreamRefreshRequestAtRef.current < 2000) {
-      return;
+    function requestBrowserStreamRefresh() {
+      const now = Date.now();
+      if (now - browserStreamRefreshRequestAtRef.current < 2000) {
+        return;
+      }
+
+      browserStreamRefreshRequestAtRef.current = now;
+      socketRef.current?.emit("browser-stream-refresh-request", { roomId });
     }
 
-    browserStreamRefreshRequestAtRef.current = now;
-    socketRef.current.emit("browser-stream-refresh-request", { roomId });
-  }, [roomId, desktopHost, isOwner, browserState.status, browserRemoteReady, participants, ownerId]);
+    requestBrowserStreamRefresh();
+    const intervalId = window.setInterval(requestBrowserStreamRefresh, 2000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [roomId, desktopHost, isOwner, browserState.status, browserRemoteReady]);
 
   useEffect(() => {
     if (browserRemoteVideoRef.current) {
