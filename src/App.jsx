@@ -2504,6 +2504,8 @@ function App() {
 
                 {!desktopHost && browserState.status?.startsWith("desktop-") ? (
                   <div className="desktop-debug">
+                    <span>Socket: {socketRef.current?.connected ? "connected" : "not connected"}</span>
+                    <span>Role: {isOwner ? "host" : "watcher"}</span>
                     <span>Browser peer: {browserConnectionDebug.connectionState}</span>
                     <span>ICE: {browserConnectionDebug.iceConnectionState}</span>
                     <span>Gathering: {browserConnectionDebug.iceGatheringState}</span>
