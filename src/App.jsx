@@ -294,6 +294,7 @@ function App() {
   const desktopBrowserStateRef = useRef(desktopBrowserState);
   const browserStreamReadyRef = useRef(browserStreamReady);
   const requestedBrowserQualityRef = useRef(new Map());
+  const browserStreamRefreshRequestAtRef = useRef(0);
   const browserInteractionRef = useRef(null);
 
   const selfId = socket?.id || null;
@@ -974,6 +975,15 @@ function App() {
       await tuneBrowserSender(sender, quality);
     });
 
+    nextSocket.on("browser-stream-refresh-request", async ({ requesterId }) => {
+      if (!desktopHost || !browserStreamRef.current || !requesterId) {
+        return;
+      }
+
+      removeBrowserPeer(requesterId);
+      await createBrowserOfferForParticipant(requesterId, nextSocket);
+    });
+
     nextSocket.on("browser-control-state", ({ controllerId: nextControllerId, controlRequests: nextRequests }) => {
       setControllerId(nextControllerId || null);
       setControlRequests(nextRequests || []);
@@ -1068,6 +1078,27 @@ function App() {
       window.clearInterval(intervalId);
     };
   }, [roomId, shouldHoldRoomEntry]);
+
+  useEffect(() => {
+    if (
+      !socketRef.current ||
+      !roomId ||
+      desktopHost ||
+      isOwner ||
+      !browserState.status?.startsWith("desktop-") ||
+      browserRemoteReady
+    ) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - browserStreamRefreshRequestAtRef.current < 2000) {
+      return;
+    }
+
+    browserStreamRefreshRequestAtRef.current = now;
+    socketRef.current.emit("browser-stream-refresh-request", { roomId });
+  }, [roomId, desktopHost, isOwner, browserState.status, browserRemoteReady, participants, ownerId]);
 
   useEffect(() => {
     if (browserRemoteVideoRef.current) {

@@ -679,6 +679,17 @@ io.on("connection", (socket) => {
     });
   });
 
+  socket.on("browser-stream-refresh-request", ({ roomId }) => {
+    const room = ensureRoom(roomId);
+    if (!room || !room.participants.has(socket.id) || !room.ownerId || isSocketRoomOwner(socket, room)) {
+      return;
+    }
+
+    io.to(room.ownerId).emit("browser-stream-refresh-request", {
+      requesterId: socket.id
+    });
+  });
+
   socket.on("request-browser-control", ({ roomId }, ack) => {
     const room = ensureRoom(roomId);
     if (!room || !room.participants.has(socket.id) || isSocketRoomOwner(socket, room)) {
